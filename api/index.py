@@ -181,7 +181,6 @@ async def stt_endpoint(data: AudioRequest):
         return {"error": f"Unexpected error: {str(e)}", "status": "error"}
 
 @app.post("/api/translate")
-@app.post("/translate")  # 保留原始端點名稱
 async def translate_text(request: TranslationRequest, background_tasks: BackgroundTasks):
     background_tasks.add_task(cleanup_idle_sessions)
 
@@ -255,7 +254,6 @@ async def translate_text(request: TranslationRequest, background_tasks: Backgrou
     }
 
 @app.post("/api/end_ride")
-@app.post("/end_ride")  # 保留原始端點名稱
 async def end_ride(request: EndRideRequest, background_tasks: BackgroundTasks):
     ride_id = request.ride_id
     if ride_id in memory_db:
@@ -278,7 +276,6 @@ async def end_ride(request: EndRideRequest, background_tasks: BackgroundTasks):
         
     return {"status": "not_found"}
 
-@app.get("/api/hello_world")
 @app.get("/hello_world")
 async def hello_world():
     return {
