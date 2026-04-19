@@ -96,6 +96,8 @@ if api_keys_env:
 else:
     translator_model = None
 
+from fastapi.middleware.cors import CORSMiddleware
+
 # ==========================================
 # FastAPI App
 # ==========================================
