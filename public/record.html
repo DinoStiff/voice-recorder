@@ -3,66 +3,117 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice AI Studio - AI 在地導遊</title>
+    <title>Voice AI Studio - 終極自動翻譯解說</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles.css">
+    <style>
+        .pipeline-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 40px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            margin-top: 2rem;
+        }
+        
+        .pulse-btn {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #6366f1, #c084fc);
+            color: white;
+            font-size: 3rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 30px auto;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 30px rgba(99, 102, 241, 0.5);
+        }
+        .pulse-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 40px rgba(192, 132, 252, 0.7);
+        }
+        .pulse-btn.recording {
+            animation: record-pulse 1.5s infinite;
+            background: linear-gradient(135deg, #ef4444, #f97316);
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.6);
+        }
+        @keyframes record-pulse {
+            0% { transform: scale(1); box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); }
+            50% { transform: scale(0.95); box-shadow: 0 0 50px rgba(239, 68, 68, 0.8); }
+            100% { transform: scale(1); box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); }
+        }
+
+        .step-indicator {
+            font-size: 1.1rem;
+            color: #94a3b8;
+            margin-bottom: 20px;
+            font-weight: 600;
+            min-height: 28px;
+            transition: color 0.3s;
+        }
+        
+        .step-indicator.active {
+            color: #4ade80;
+        }
+
+        .transcript-box {
+            background: rgba(0,0,0,0.4);
+            border-left: 4px solid #c084fc;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: left;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .transcript-box.show {
+            display: block;
+            animation: fade-in 0.5s ease forwards;
+        }
+
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
 </head>
 <body>
     <div class="container" style="max-width: 800px;">
         <div id="view-guide" class="view active" style="width:100%;">
             
-            <p id="guide-greeting" style="color:var(--primary); font-weight:bold; margin-bottom: 2rem; font-size:1.2rem; text-align:center;"></p>
+            <p id="guide-greeting" style="color:#c084fc; font-weight:bold; margin-bottom: 1rem; font-size:1.3rem; text-align:center;"></p>
+            <h1 style="text-align:center; font-family:'Noto Sans TC'; margin-bottom: 0.5rem;">AI 導遊雙語播報台</h1>
+            <p style="text-align:center; color:var(--text-muted);">說出中文導覽，AI 自動翻譯並以「您的聲音」說出道地英文！</p>
 
-            <!-- UI 1: Voice AI Studio -->
-            <div class="recorder-container">
-                <div class="header">
-                    <h1>Voice AI Studio</h1>
-                    <p>Record your voice, clone it, and make it say anything!</p>
-                </div>
-
-                <textarea id="sentenceInput" class="text-input" placeholder="Type a sentence here... Then record a 10s voice sample, and we will clone your voice to say this sentence! (Leave blank to just upload to cloud)"></textarea>
-
-                <div class="record-button-wrapper">
-                    <button class="record-btn" id="studioRecordBtn" title="Start Recording">
-                        <svg width="24" height="32" viewBox="0 0 24 32" fill="none" xmlns="http://www.w3.org/2000/svg" id="micIcon">
-                            <path d="M12 21C14.7614 21 17 18.7614 17 16V6C17 3.23858 14.7614 1 12 1C9.23858 1 7 3.23858 7 6V16C7 18.7614 9.23858 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                            <path d="M4 14V16C4 20.4183 7.58172 24 12 24M20 14V16C20 20.4183 16.4183 24 12 24M12 24V31M8 31H16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                        </svg>
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" id="stopIcon" style="display: none;">
-                            <rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" />
-                        </svg>
+            <div class="pipeline-card">
+                <div class="step-indicator" id="pipeline-status">準備就緒，點擊麥克風開始錄音</div>
+                
+                <div class="record-button-wrapper" style="position:relative;">
+                    <button class="pulse-btn" id="master-record-btn" title="Start Recording">
+                        <span id="btn-icon">🎙️</span>
                     </button>
-                    <div class="ripple"></div>
+                    <div id="recording-timer" style="font-family:monospace; font-size:1.5rem; color:#cbd5e1; display:none;">00:00</div>
                 </div>
 
-                <div class="timer" id="timerDisplay">00:00</div>
-                <div class="status-display" id="studioStatusText">Ready to record</div>
-
-                <div class="audio-player-container" id="playerContainer">
-                    <audio id="audioPlayback" controls></audio>
+                <div class="audio-player-container" id="playerContainer" style="display:none; margin-top:20px;">
+                    <p style="color:#4ade80; font-weight:bold; margin-bottom:10px;">🎧 您的英文專屬導覽已生成：</p>
+                    <audio id="audioPlayback" controls style="width:100%; border-radius:20px;"></audio>
                 </div>
 
-                <div class="result-container" id="resultBox">
-                    <p style="color: #4ade80; margin-bottom: 8px;" id="studioSuccessText">Upload Success!</p>
-                    <a href="#" id="resultLink" target="_blank" style="color: #60a5fa; text-decoration: none; font-size: 0.9rem;">View Uploaded File</a>
-                </div>
-            </div>
-
-            <!-- UI 2: Original Guide Translation -->
-            <div class="glass-panel" style="margin-top: 2rem;">
-                <h2>熱情解說翻譯模式</h2>
-                <p>說出你想跟外國人介紹的故事，將自動翻譯成道地英文語音！</p>
-                <button class="btn primary" id="guide-start" style="padding: 1.5rem; font-size:1.1rem; border-radius: 50px;">🎙️ 開始錄音 (翻譯模式)</button>
-                <button class="btn danger pulse" id="guide-stop" style="padding: 1.5rem; font-size:1.1rem; border-radius: 50px; display:none;">⏹ 停止並翻譯</button>
-                
-                <div id="guide-status" class="status-badge" style="margin-top: 1.5rem;">狀態：等待解說</div>
-                
-                <div id="translation-result" style="display: none; background: rgba(0,0,0,0.4); padding: 1rem; border-radius: 12px; font-size: 0.95rem; width: 100%; line-height: 1.5; margin-top: 1rem; color: #FFF; text-align: left; border-left: 4px solid var(--primary);">
-                    <strong style="color: #00d2ff;">您的原文：</strong><br>
-                    <span id="trans-zh"></span><br><br>
-                    <strong style="color: #ff9900;">AI 道地英文：</strong><br>
-                    <span id="trans-en"></span>
+                <div class="transcript-box" id="transcript-box">
+                    <strong style="color: #00d2ff;">🇹🇼 您剛才說：</strong>
+                    <p id="trans-zh" style="margin: 10px 0 20px 0; font-size:1.05rem; line-height:1.6;"></p>
+                    
+                    <strong style="color: #ff9900;">🇺🇸 AI 道地翻譯：</strong>
+                    <p id="trans-en" style="margin: 10px 0 0 0; font-size:1.05rem; line-height:1.6;"></p>
                 </div>
             </div>
             
@@ -74,30 +125,27 @@
         const currentUserName = localStorage.getItem('currentUserName');
         if(!currentUser) window.location.href = '/';
         
-        document.getElementById('guide-greeting').innerText = `導遊 ${currentUserName}，上工囉！`;
+        document.getElementById('guide-greeting').innerText = `歡迎回來，${currentUserName}！`;
         document.getElementById('logout-btn').onclick = () => { localStorage.clear(); window.location.href = '/'; };
         
         const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : '';
 
-        // ==========================================
-        // 1. Voice AI Studio Logic
-        // ==========================================
-        let studioRecorder = null;
-        let studioChunks = [];
+        let recorder = null;
+        let chunks = [];
         let isRecording = false;
-        let timerInterval = null;
         let seconds = 0;
+        let timerInterval = null;
 
-        const studioRecordBtn = document.getElementById('studioRecordBtn');
-        const micIcon = document.getElementById('micIcon');
-        const stopIcon = document.getElementById('stopIcon');
-        const studioStatusText = document.getElementById('studioStatusText');
-        const resultBox = document.getElementById('resultBox');
-        const resultLink = document.getElementById('resultLink');
-        const timerDisplay = document.getElementById('timerDisplay');
+        const recordBtn = document.getElementById('master-record-btn');
+        const btnIcon = document.getElementById('btn-icon');
+        const statusEl = document.getElementById('pipeline-status');
+        const timerDisplay = document.getElementById('recording-timer');
+        const transcriptBox = document.getElementById('transcript-box');
         const playerContainer = document.getElementById('playerContainer');
         const audioPlayback = document.getElementById('audioPlayback');
-        const studioSuccessText = document.getElementById('studioSuccessText');
+
+        const transZh = document.getElementById('trans-zh');
+        const transEn = document.getElementById('trans-en');
 
         function updateTimer() {
             seconds++;
@@ -106,180 +154,119 @@
             timerDisplay.textContent = `${mins}:${secs}`;
         }
 
-        studioRecordBtn.onclick = async () => {
+        recordBtn.onclick = async () => {
             if (!isRecording) {
+                // START RECORDING
                 try {
+                    chunks = [];
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    studioRecorder = new MediaRecorder(stream);
-                    studioRecorder.ondataavailable = e => { if (e.data.size > 0) studioChunks.push(e.data); };
-                    studioRecorder.onstop = processStudioAudio;
-                    studioRecorder.start(10);
+                    recorder = new MediaRecorder(stream);
+                    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+                    recorder.onstop = processFullPipeline;
+                    recorder.start(10); // Capture chunk every 10ms
 
                     isRecording = true;
-                    studioRecordBtn.classList.add('recording');
-                    micIcon.style.display = 'none';
-                    stopIcon.style.display = 'block';
-                    studioStatusText.textContent = "Recording...";
-
-                    resultBox.classList.remove('show');
-                    playerContainer.classList.remove('show');
+                    recordBtn.classList.add('recording');
+                    btnIcon.innerText = "⏹";
+                    statusEl.innerText = "🎙️ 正在聆聽您的解說...";
+                    statusEl.className = "step-indicator";
+                    
+                    transcriptBox.classList.remove('show');
+                    playerContainer.style.display = 'none';
                     seconds = 0;
                     timerDisplay.textContent = "00:00";
-                    timerDisplay.classList.add('active');
+                    timerDisplay.style.display = "block";
                     timerInterval = setInterval(updateTimer, 1000);
                 } catch (err) {
-                    studioStatusText.textContent = "Error: Please allow microphone access.";
-                    studioStatusText.style.color = "#ef4444";
+                    statusEl.innerText = "❌ 錯誤：無法存取麥克風";
+                    statusEl.style.color = "#ef4444";
                 }
             } else {
-                if (studioRecorder && studioRecorder.state !== 'inactive') {
-                    studioRecorder.stop();
-                    studioRecorder.stream.getTracks().forEach(track => track.stop());
+                // STOP RECORDING
+                if (recorder && recorder.state !== 'inactive') {
+                    recorder.stop();
+                    recorder.stream.getTracks().forEach(track => track.stop());
                 }
                 clearInterval(timerInterval);
-                timerDisplay.classList.remove('active');
+                timerDisplay.style.display = "none";
                 isRecording = false;
-                studioRecordBtn.classList.remove('recording');
-                micIcon.style.display = 'block';
-                stopIcon.style.display = 'none';
-                studioStatusText.textContent = "Processing...";
+                recordBtn.classList.remove('recording');
+                btnIcon.innerText = "⏳";
+                statusEl.innerText = "🔄 準備處理音檔...";
+                statusEl.className = "step-indicator";
             }
         };
 
-        async function processStudioAudio() {
-            const sentence = document.getElementById('sentenceInput').value.trim();
-            const blob = new Blob(studioChunks, { type: 'audio/webm' });
-            const formData = new FormData();
-            formData.append('file', blob, 'recording.webm');
-            formData.append('userId', currentUser);
+        async function processFullPipeline() {
+            const blob = new Blob(chunks, { type: 'audio/webm' });
+            
+            // 1. Upload to Cloudinary & trigger STT
+            const uploadForm = new FormData();
+            uploadForm.append('userId', currentUser);
+            uploadForm.append('voiceNote', blob);
 
+            btnIcon.innerText = "🎙️";
+            statusEl.innerText = "⏳ 步驟 1/4: 上傳音檔至伺服器...";
+            
             try {
-                if (sentence) {
-                    studioStatusText.textContent = "Cloning your voice & synthesizing text...";
-                    formData.append('text', sentence);
-                    const res = await fetch(`${API_BASE}/api/clone`, { method: 'POST', body: formData });
-                    if (!res.ok) throw new Error("Clone failed");
+                const uploadRes = await fetch('/api/upload', { method: 'POST', body: uploadForm });
+                if(!uploadRes.ok) throw new Error("Upload Failed");
+                const uploadData = await uploadRes.json();
 
-                    const cloneBlob = await res.blob();
-                    const cloneUrl = URL.createObjectURL(cloneBlob);
-                    studioStatusText.textContent = "Voice Cloning Complete! Listen below:";
-                    studioStatusText.style.color = "#4ade80";
+                // 2. Perform STT
+                statusEl.innerText = "🤖 步驟 2/4: AI 語音辨識 (STT) 處理中...";
+                const sttReq = await fetch(`${API_BASE}/api/stt`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ audio_path: uploadData.url })
+                });
+                const sttData = await sttReq.json();
 
-                    audioPlayback.src = cloneUrl;
-                    playerContainer.classList.add('show');
-                    audioPlayback.play();
+                if(sttData.status !== 'success') throw new Error(sttData.error || "STT 失敗");
+                
+                transcriptBox.classList.add('show');
+                transZh.innerText = sttData.text;
+                transEn.innerText = "...等待 AI 翻譯潤飾中...";
 
-                    resultLink.href = cloneUrl;
-                    resultLink.download = "ai_cloned_voice.mp3";
-                    resultLink.textContent = "Download Synthesized Audio";
-                    studioSuccessText.textContent = "Clone Success!";
-                    resultBox.classList.add('show');
-                } else {
-                    studioStatusText.textContent = "Uploading to Cloudinary...";
-                    const audioUrl = URL.createObjectURL(blob);
-                    audioPlayback.src = audioUrl;
-                    playerContainer.classList.add('show');
+                // 3. Perform Translation
+                statusEl.innerText = "🌍 步驟 3/4: 分析語意，翻譯成道地英文...";
+                const transReq = await fetch(`${API_BASE}/api/translate`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ride_id: currentUser, text: sttData.text })
+                });
+                const transData = await transReq.json();
 
-                    const uploadForm = new FormData();
-                    uploadForm.append('voiceNote', blob); 
-                    uploadForm.append('userId', currentUser);
-                    const res = await fetch('/api/upload', { method: 'POST', body: uploadForm });
-                    if (!res.ok) throw new Error("Upload failed");
-
-                    const data = await res.json();
-                    studioStatusText.textContent = "Upload Complete!";
-                    studioStatusText.style.color = "#4ade80";
-
-                    resultLink.href = data.url;
-                    resultLink.removeAttribute("download");
-                    resultLink.textContent = "View Uploaded File";
-                    studioSuccessText.textContent = "Saved to Cloudinary!";
-                    resultBox.classList.add('show');
+                if(!transData.final_english || transData.final_english.includes("Failed")) {
+                    throw new Error("翻譯失敗");
                 }
+                
+                transEn.innerText = transData.final_english;
+
+                // 4. Voice Cloning & TTS
+                statusEl.innerText = "🪄 步驟 4/4: ElevenLabs 正在複製您的聲音合成英文語音...";
+                const cloneForm = new FormData();
+                cloneForm.append('file', blob, 'recording.webm');
+                cloneForm.append('userId', currentUser);
+                cloneForm.append('text', transData.final_english);
+
+                const cloneRes = await fetch(`${API_BASE}/api/clone`, { method: 'POST', body: cloneForm });
+                if (!cloneRes.ok) throw new Error("Voice Clone 失敗");
+
+                const cloneBlob = await cloneRes.blob();
+                const cloneUrl = URL.createObjectURL(cloneBlob);
+                
+                // Final Output
+                statusEl.innerText = "🎉 完美達成！請直接點擊下方播放您的英文專屬語音！";
+                statusEl.classList.add('active');
+                
+                audioPlayback.src = cloneUrl;
+                playerContainer.style.display = 'block';
+                audioPlayback.play(); // Auto-play the final result
+                
             } catch (err) {
                 console.error(err);
-                studioStatusText.textContent = "Process Failed! Check server.";
-                studioStatusText.style.color = "#ef4444";
+                statusEl.innerText = `❌ 處理失敗: ${err.message}`;
+                statusEl.style.color = "#ef4444";
             }
-            studioChunks = [];
-        }
-
-        // ==========================================
-        // 2. Original Voice Translation Logic
-        // ==========================================
-        let recorder = null;
-        let chunks = [];
-        
-        document.getElementById('guide-start').onclick = async () => {
-            chunks = [];
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            recorder = new MediaRecorder(stream);
-            recorder.ondataavailable = e => chunks.push(e.data);
-            recorder.onstop = uploadAudio;
-            recorder.start();
-            
-            document.getElementById('guide-start').style.display = 'none';
-            document.getElementById('guide-stop').style.display = 'flex';
-            document.getElementById('guide-status').innerText = "狀態：🎙️正在聽您解說...";
-            document.getElementById('translation-result').style.display = 'none';
-        };
-        
-        document.getElementById('guide-stop').onclick = () => {
-            if(recorder && recorder.state === 'recording') {
-                recorder.stop();
-                document.getElementById('guide-stop').style.display = 'none';
-                document.getElementById('guide-status').innerText = "狀態：⏳ 音檔上傳中...";
-            }
-        };
-
-        async function uploadAudio() {
-            const blob = new Blob(chunks, { type: 'audio/webm' });
-            const formData = new FormData();
-            formData.append('userId', currentUser);
-            formData.append('voiceNote', blob);
-            
-            const statusEl = document.getElementById('guide-status');
-            try {
-                const res = await fetch('/api/upload', { method: 'POST', body: formData });
-                const data = await res.json();
-                if(res.ok) {
-                    statusEl.innerText = "🚀 語音上傳成功，正在進行語音轉文字 (STT)...";
-                    
-                    const sttReq = await fetch(`${API_BASE}/api/stt`, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ audio_path: data.url })
-                    });
-                    const sttData = await sttReq.json();
-                    
-                    if(sttData.status === 'success') {
-                        statusEl.innerText = "🤖 辨識成功！正在進行導遊情境翻譯潤飾...";
-                        document.getElementById('translation-result').style.display = 'block';
-                        document.getElementById('trans-zh').innerText = sttData.text;
-                        document.getElementById('trans-en').innerText = "...等待 AI 翻譯中...";
-                        
-                        const transReq = await fetch(`${API_BASE}/api/translate`, {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ride_id: currentUser, text: sttData.text })
-                        });
-                        const transData = await transReq.json();
-                        
-                        if(transData.final_english && !transData.final_english.includes("Failed")) {
-                            statusEl.innerText = "✨ 翻譯完成！請看畫面結果。";
-                            document.getElementById('trans-en').innerText = transData.final_english;
-                        } else {
-                            statusEl.innerText = "❌ 翻譯失敗";
-                            document.getElementById('trans-en').innerText = "(伺服器錯誤)";
-                        }
-                    } else {
-                        statusEl.innerText = "❌ 語音辨識失敗：" + (sttData.error || '不明錯誤');
-                    }
-                } else {
-                    statusEl.innerText = "❌ 上傳雲端失敗！";
-                }
-            } catch (err) {
-                statusEl.innerText = "❌ API 連線錯誤 (請確認 python server 有啟動)";
-            }
-            document.getElementById('guide-start').style.display = 'flex';
         }
     </script>
 </body>
