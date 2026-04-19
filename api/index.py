@@ -202,46 +202,47 @@ def _delete_cloudinary_file(url: str):
 
 @app.post("/api/stt")
 async def stt_endpoint(data: AudioRequest, background_tasks: BackgroundTasks):
-    # Use Cloudinary URL transformation to convert any audio format (WebM, MP4, AAC) to WAV
-    import re
     original_url = data.audio_path
-    if '/upload/' in original_url:
-        # Insert f_wav transformation and force .wav extension
-        download_url = original_url.replace('/upload/', '/upload/f_wav/')
-        download_url = re.sub(r'\.(webm|mp4|m4a|ogg|aac|flac)$', '.wav', download_url)
-    else:
-        download_url = original_url  # fallback
-    
+    groq_key = os.getenv("GROQ_API_KEY", "")
+
+    # Download raw audio (no format conversion needed - Groq accepts WebM/MP4 directly)
     try:
-        response = requests.get(download_url)
+        response = requests.get(original_url, timeout=30)
         response.raise_for_status()
     except requests.RequestException as e:
         return {"error": f"Failed to download audio: {str(e)}", "status": "error"}
 
-    recognizer = sr.Recognizer()
-    audio_io = io.BytesIO(response.content)
+    # Auto-delete Cloudinary file after download
+    background_tasks.add_task(_delete_cloudinary_file, original_url)
+
+    if not groq_key:
+        return {"error": "GROQ_API_KEY not configured", "status": "error"}
 
     try:
-        with sr.AudioFile(audio_io) as source:
-            audio_data = recognizer.record(source)
-            
-        print("⏳ 正在傳送至 Google 進行辨識...")
-        text = recognizer.recognize_google(audio_data, language="zh-TW")
-        print(f"✅ 辨識結果：{text}")
-        background_tasks.add_task(_delete_cloudinary_file, original_url)
+        # Detect file extension from URL for proper MIME type
+        ext = original_url.split('?')[0].rsplit('.', 1)[-1].lower() if '.' in original_url else 'webm'
+        mime_map = {'webm': 'audio/webm', 'mp4': 'audio/mp4', 'm4a': 'audio/mp4',
+                    'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'ogg': 'audio/ogg'}
+        mime = mime_map.get(ext, 'audio/webm')
+        filename = f"audio.{ext}"
+
+        logger.info(f"⏳ Sending to Groq Whisper ({mime})...")
+        groq_resp = requests.post(
+            "https://api.groq.com/openai/v1/audio/transcriptions",
+            headers={"Authorization": f"Bearer {groq_key}"},
+            files={"file": (filename, response.content, mime)},
+            data={"model": "whisper-large-v3-turbo", "language": "zh", "response_format": "text"},
+            timeout=60
+        )
+
+        if groq_resp.status_code != 200:
+            return {"error": f"Groq STT error: {groq_resp.text}", "status": "error"}
+
+        text = groq_resp.text.strip()
+        logger.info(f"✅ Groq 辨識結果：{text}")
         return {"text": text, "status": "success"}
-    
-    except sr.UnknownValueError:
-        background_tasks.add_task(_delete_cloudinary_file, original_url)
-        return {"error": "❌ 聽不懂您說的話，請再試一次。", "status": "error"}
-    except sr.RequestError:
-        background_tasks.add_task(_delete_cloudinary_file, original_url)
-        return {"error": "❌ 無法連線至語音辨識伺服器，請檢查網路。", "status": "error"}
-    except ValueError as e:
-        background_tasks.add_task(_delete_cloudinary_file, original_url)
-        return {"error": f"Audio file formatting error: {str(e)}", "status": "error"}
+
     except Exception as e:
-        background_tasks.add_task(_delete_cloudinary_file, original_url)
         return {"error": f"Unexpected error: {str(e)}", "status": "error"}
 
 @app.post("/api/translate")
