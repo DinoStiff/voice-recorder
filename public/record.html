@@ -242,7 +242,7 @@
                 });
                 const transData = await transReq.json();
 
-                if(transData.status !== 'success') throw new Error(`翻譯失敗: ${transData.error}`);
+                if(!transData.final_english || transData.final_english.startsWith('(')) throw new Error(`翻譯失敗: ${transData.final_english || transData.detail || '未知錯誤'}`);
                 
                 transEn.innerText = transData.final_english;
 
