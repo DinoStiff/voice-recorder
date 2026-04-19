@@ -210,8 +210,9 @@
             
             try {
                 const uploadRes = await fetch('/api/upload', { method: 'POST', body: uploadForm });
-                if(!uploadRes.ok) throw new Error("Upload Failed");
-                const uploadData = await uploadRes.json();
+                const uploadText = await uploadRes.text();
+                if(!uploadRes.ok) throw new Error("Upload Failed: " + uploadText);
+                const uploadData = JSON.parse(uploadText);
 
                 // 2. Perform STT
                 statusEl.innerText = "🤖 步驟 2/4: AI 語音辨識 (STT) 處理中...";
@@ -219,8 +220,11 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ audio_path: uploadData.url })
                 });
-                const sttData = await sttReq.json();
-
+                const sttText = await sttReq.text();
+                if(!sttReq.ok) throw new Error("STT 連線失敗: " + sttText.substring(0, 50));
+                
+                let sttData;
+                try { sttData = JSON.parse(sttText); } catch (e) { throw new Error("STT 回傳格式錯誤: " + sttText.substring(0, 50)); }
                 if(sttData.status !== 'success') throw new Error(sttData.error || "STT 失敗");
                 
                 transcriptBox.classList.add('show');

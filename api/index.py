@@ -352,7 +352,6 @@ async def hello_world():
         "timestamp": "2026-04-11"
     }
 
-import os
-if os.path.exists("public"):
-    app.mount("/", StaticFiles(directory="public", html=True), name="public")
-
+# Disabled StaticFiles fallthrough to prevent Vercel returning 200 OK HTML on 404s
+# if os.path.exists("public"):
+#     app.mount("/", StaticFiles(directory="public", html=True), name="public")
