@@ -239,9 +239,7 @@
                 });
                 const transData = await transReq.json();
 
-                if(!transData.final_english || transData.final_english.includes("Failed")) {
-                    throw new Error("翻譯失敗");
-                }
+                if(transData.status !== 'success') throw new Error(`翻譯失敗: ${transData.error}`);
                 
                 transEn.innerText = transData.final_english;
 
