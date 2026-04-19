@@ -83,7 +83,7 @@ system_instruction = (
 if api_keys_env:
     try:
         translator_model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
+            model_name="gemini-2.5-flash-preview-04-17",
             system_instruction=system_instruction,
             generation_config={
                 "response_mime_type": "application/json",
