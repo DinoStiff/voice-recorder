@@ -175,7 +175,13 @@ def cache_add(text: str, raw: str, final: str):
 
 @app.post("/api/stt")
 async def stt_endpoint(data: AudioRequest):
-    download_url = data.audio_path.replace('.webm', '.wav')
+    # Use Cloudinary URL transformation to convert any audio format (WebM, MP4, AAC) to WAV
+    # This works by inserting the transformation segment before the version/path part
+    original_url = data.audio_path
+    if '/upload/' in original_url:
+        download_url = original_url.replace('/upload/', '/upload/f_wav,ac_1,ar_16000/')
+    else:
+        download_url = original_url  # fallback
     
     try:
         response = requests.get(download_url)
