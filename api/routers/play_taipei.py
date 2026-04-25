@@ -97,7 +97,7 @@ SYSTEM_INSTRUCTION_TEMPLATE = (
     "  ]\n"
     "}\n"
     "- 社群話題：\n{social_context}\n"
-))
+)
 
 GUIDE_MODEL = genai.GenerativeModel(
     model_name="gemini-2.5-flash",
