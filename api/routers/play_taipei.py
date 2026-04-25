@@ -87,16 +87,18 @@ SYSTEM_INSTRUCTION_TEMPLATE = (
     "4. 你的回覆必須是嚴格的 JSON 格式。\n"
     "JSON Schema 如下：\n"
     "{\n"
-    "  \"requires_clarification\": true或false,\n"
-    "  \"translation\": {\"zh\": \"精確解讀中文(若需致歉在此)\", \"en\": \"英文翻譯\"}\n,"
-    "  \"voice_script\": \"熱情但不廢話的回覆。若 requires_clarification=true，請在此發問。\",\n"
+    "  \"translation\": {\"zh\": \"對用戶輸入的中文翻譯\", \"en\": \"對用戶輸入的英文翻譯\"},\n"
+    "  \"voice_script\": \"要給觀光客聽的導遊口說台詞\",\n"
     "  \"itinerary\": [\n"
     "    {\"time\": \"時間\", \"name\": \"景點/餐廳\", \"price\": \"估計價格帶(如: 150-300元)\", \"distance\": \"交通預估(如: 步行5分鐘)\", \"description\": \"為何推薦\", \"address\": \"地址\", \"image_url\": \"\"}\n"
     "  ]\n"
     "}\n"
-    "5. translation 欄位：請自動偵測使用者輸入的語言。如果輸入是中文，zh 欄位保留原文，並將其翻譯成英文填入 en 欄位；如果輸入是英文，en 欄位保留原文，並將其翻譯成中文填入 zh 欄位。\n"
-    "6. 請從以下【候選景點資料庫】中挑選最適合的：\n{poi_str}\n"
-    "7. 參考今日話題(非強制)：\n{social_context}\n"
+    "規則：\n"
+    "1. 如果使用者只是在寒暄，itinerary 可以是空陣列。\n"
+    "2. translation 欄位：自動偵測使用者輸入的語言。如果輸入是中文，zh 欄位保留原文，並將其翻譯成英文填入 en 欄位；如果輸入是英文，en 欄位保留原文，並將其翻譯成中文填入 zh 欄位。\n"
+    "3. voice_script 欄位：此欄位的語言必須與 translation 欄位中被翻譯出來的目標語言一致。例如，若使用者輸入中文，此欄位應為英文；若使用者輸入英文，此欄位應為中文。內容應為自然、口語化的導遊介紹詞，而不僅是生硬的翻譯。\n"
+    "4. 參考景點：{poi_str}\n"
+    "5. 今日社群話題：\n{social_context}\n"
 )
 
 GUIDE_MODEL = genai.GenerativeModel(
@@ -252,6 +254,71 @@ async def play_taipei_query(request: QueryRequest, http_request: FastAPIRequest)
         voice_script = result.get("voice_script", "")
         tts_url = None
         
+        if ELEVENLABS_API_KEY and voice_script:
+            # 為了產生高品質的中文語音，建議使用 multilingual v2 模型
+            # 建立儲存音檔的目錄，路徑會是 <專案根目錄>/static/tts
+            STATIC_DIR = os.path.join(os.path.dirname(BASE_DIR), "static")
+            TTS_OUTPUT_DIR = os.path.join(STATIC_DIR, "tts")
+            os.makedirs(TTS_OUTPUT_DIR, exist_ok=True)
+
+            # 參考: https://elevenlabs.io/docs/speech-synthesis/models
+            TTS_MODEL_ID = "eleven_multilingual_v2"
+            
+            # 【關於聲紋克隆與自然語調的說明】
+            # 您的需求是：使用「講者的聲紋」講出「目標語言的自然語調」。
+            # 這正是 ElevenLabs v2 多語言模型的核心優勢。
+            # 1. 聲音來源 (TTS_VOICE_ID): 
+            #    - 理想情況下，這裡應傳入一個透過您 App 上傳聲音樣本後，由 ElevenLabs API 動態生成的「克隆聲音 ID」。
+            #    - 目前我們使用一個高品質的預設多語言聲音("Mimi")，它本身就能自然地講中文和英文。
+            # 2. 自然語調 (voice_settings):
+            #    - 當我們給 v2 模型一段中文或英文 text 時，它會自動用該語言最自然的語調去生成。
+            #    - `similarity_boost` 參數是關鍵：
+            #      - 數值越高 (如 0.9)，越能保留原始聲音的特徵，但可能連同「口音」也一併保留。
+            #      - 數值越低 (如 0.3)，模型有更多自由去產生目標語言的標準語調，但聲音可能聽起來比較不像原始講者。
+            #      - 0.7 左右通常是在「保留聲紋」和「確保語調自然」之間的最佳平衡點。
+            
+            tts_api_url = f"https://api.elevenlabs.io/v1/text-to-speech/{TTS_VOICE_ID}"
+            
+            headers = {
+                "Accept": "audio/mpeg",
+                "Content-Type": "application/json",
+                "xi-api-key": ELEVENLABS_API_KEY.split(",")[0].strip()
+            }
+            
+            data = {
+                "text": voice_script,
+                "model_id": TTS_MODEL_ID,
+                "voice_settings": {
+                    "stability": 0.5,
+                    "similarity_boost": 0.7, # 稍微提高相似度以更好地保留聲紋，同時依賴 v2 模型修正口音
+                    "style": 0.1, # 風格誇張度，設低一點讓語氣更平實
+                    "use_speaker_boost": True # 推薦開啟，能增強聲音的清晰度
+                }
+            }
+            
+            try:
+                response = requests.post(tts_api_url, json=data, headers=headers)
+                response.raise_for_status()
+                
+                # 1. 產生一個獨一無二的檔案名稱
+                filename = f"{uuid.uuid4()}.mp3"
+                filepath = os.path.join(TTS_OUTPUT_DIR, filename)
+
+                # 2. 將 ElevenLabs 回傳的音訊內容寫入檔案
+                with open(filepath, "wb") as f:
+                    f.write(response.content)
+                
+                # 3. 產生一個前端可以存取的 URL
+                #    這需要主應用程式設定好靜態檔案路徑 (請見步驟 3)
+                tts_url = str(http_request.url_for('static', path=f'tts/{filename}'))
+
+                logger.info(f"TTS audio generated for session {request.session_id} at {tts_url}")
+
+            except requests.exceptions.RequestException as re:
+                logger.error(f"ElevenLabs API request failed: {re}")
+            except Exception as e:
+                logger.error(f"Failed to save or create URL for TTS audio: {e}")
+
         # 7. 組裝 Response
         return QueryResponse(
             requires_clarification=result.get("requires_clarification", False),
