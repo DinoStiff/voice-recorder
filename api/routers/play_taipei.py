@@ -252,3 +252,17 @@ async def play_taipei_query(request: QueryRequest, http_request: FastAPIRequest)
         voice_script = result.get("voice_script", "")
         tts_url = None
         
+        # 7. 組裝 Response
+        return QueryResponse(
+            requires_clarification=result.get("requires_clarification", False),
+            translation=Translation(**result.get("translation", {"zh": "", "en": ""})),
+            voice_script=voice_script,
+            itinerary=[ItineraryItem(**item) for item in result.get("itinerary", [])],
+            tts_audio_url=None
+        )
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        logger.error(f"Error in play_taipei_query: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
