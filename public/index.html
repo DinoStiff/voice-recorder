@@ -3,25 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 在地導遊 - 登入</title>
+    <title>音為台北 - 登入與模組選擇</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/styles.css?v=2">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        .module-btn {
+            display: block;
+            width: 100%;
+            padding: 20px;
+            margin: 15px 0;
+            font-size: 1.2rem;
+            font-weight: 600;
+            border-radius: 12px;
+            text-align: center;
+            text-decoration: none;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+        .btn-play {
+            background-color: #2563eb;
+            color: white;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+        }
+        .btn-play:hover {
+            background-color: #1d4ed8;
+            transform: translateY(-2px);
+        }
+        .btn-safe {
+            background-color: #10b981;
+            color: white;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+        }
+        .btn-safe:hover {
+            background-color: #059669;
+            transform: translateY(-2px);
+        }
+        .view {
+            animation: fadeIn 0.4s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .logout-link {
+            color: var(--primary);
+            text-decoration: underline;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 0.9rem;
+            margin-top: 20px;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
+        <!-- 登入面板 -->
         <div id="view-login" class="view active glass-panel">
-            <h1>AI 在地導遊</h1>
-            <p>請使用您的 Google 帳號登入系統</p>
+            <h1>音為台北</h1>
+            <p>AI 語音台北導覽</p>
             <div id="google_btn_container" style="display: flex; justify-content: center; margin-top: 15px;"></div>
         </div>
+
+        <!-- 模組選擇面板 (登入後顯示) -->
+        <div id="view-modules" class="view glass-panel" style="display: none;">
+            <h1 id="welcome-msg">歡迎！</h1>
+            <p>請選擇您要啟用的服務：</p>
+            
+            <a href="/safe_stay.html" class="module-btn btn-safe">
+                🏨 住宿安全警示 (Safe Stay)
+            </a>
+            
+            <a href="/play_taipei.html" class="module-btn btn-play">
+                🎒 音為台北導覽 (Voice of Taipei)
+            </a>
+
+            <button class="logout-link" onclick="logout()">登出</button>
+        </div>
     </div>
+    
     <script>
         window.onload = function () {
             let clientId = "970732083734-28k4jtivkvrdcuf314sp3d1c3ltfn9oj.apps.googleusercontent.com"; // Localhost
             if (window.location.hostname.includes('vercel.app')) {
                 clientId = "970732083734-j5s5c6dnakt75ds6bhsu0lqr0b41lcbg.apps.googleusercontent.com"; // Vercel
+            }
+
+            // 如果已經登入過，可以直接進入選單
+            const currentUser = localStorage.getItem('currentUserName');
+            if(currentUser) {
+                showModulesMenu(currentUser);
+                return;
             }
 
             google.accounts.id.initialize({
@@ -40,18 +114,26 @@
             let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
             return JSON.parse(decodeURIComponent(window.atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')));
         }
+        
         function handleGoogleLogin(response) {
             const payload = decodeJwtResponse(response.credential);
             const googleId = payload.sub;
             localStorage.setItem('currentUser', googleId);
             localStorage.setItem('currentUserName', payload.name);
             
-            const hasEnrolled = localStorage.getItem(`voice_enrolled_${googleId}`);
-            if (!hasEnrolled) {
-                window.location.href = '/register';
-            } else {
-                window.location.href = `/user/${googleId}/record`;
-            }
+            showModulesMenu(payload.name);
+        }
+
+        function showModulesMenu(userName) {
+            document.getElementById('view-login').style.display = 'none';
+            document.getElementById('view-modules').style.display = 'block';
+            document.getElementById('welcome-msg').innerText = `歡迎，${userName}！`;
+        }
+
+        function logout() {
+            localStorage.removeItem('currentUser');
+            localStorage.removeItem('currentUserName');
+            window.location.reload();
         }
     </script>
 </body>
