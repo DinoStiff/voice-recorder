@@ -116,38 +116,7 @@ function renderSubtitles(translationObj) {
     // Disabled: Handled natively by Chat Bubble addChatBubble() function now
 }
 
-// --- 核心音訊錄製與微服務連鎖打點 ---
-document.getElementById('record-button').addEventListener('mousedown', startRecording);
-document.getElementById('record-button').addEventListener('mouseup', stopRecording);
-document.getElementById('record-button').addEventListener('touchstart', startRecording);
-document.getElementById('record-button').addEventListener('touchend', stopRecording);
 
-async function startRecording(e) {
-    e.preventDefault();
-    if(isRecording) return;
-    
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-        audioChunks = [];
-        
-        mediaRecorder.ondataavailable = event => {
-            if (event.data.size > 0) audioChunks.push(event.data);
-        };
-        
-        mediaRecorder.onstop = processVoiceData;
-        mediaRecorder.start();
-        isRecording = true;
-        setMicState(true);
-        showStatus("聽您說話中...");
-        
-        
-        document.getElementById('itinerary-display').innerHTML = '';
-    } catch (err) {
-        console.error("無法存取麥克風", err);
-        showStatus("麥克風授權失敗：" + err.message);
-    }
-}
 
 
 async function handleUserInput(textInput) {
