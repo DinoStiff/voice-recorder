@@ -164,7 +164,9 @@ def scrape_duckduckgo(query: str) -> str:
             return ""
             
         # Enforce Geofence & Recency & Viability
-        search_query = f"{query[:20]} 2024 最新 仍在營業 推薦 台北 新北 基隆"
+        import datetime
+        current_year = datetime.datetime.now().year
+        search_query = f"{query[:20]} {current_year} 最新 仍在營業 推薦 台北 新北 基隆" 
         data = urllib.parse.urlencode({'q': search_query}).encode('utf-8')
         req = urllib.request.Request('https://lite.duckduckgo.com/lite/', data=data, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
         html = urllib.request.urlopen(req, timeout=3.0).read().decode('utf-8')
