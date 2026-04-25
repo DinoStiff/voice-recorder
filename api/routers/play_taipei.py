@@ -3,10 +3,11 @@ import json
 import time
 import logging
 from typing import List, Dict, Optional, Any
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request as FastAPIRequest
 from pydantic import BaseModel, Field
 import google.generativeai as genai
 import requests
+import uuid
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -136,7 +137,7 @@ def get_social_context() -> str:
 # ==========================================
 
 @router.post("/query", response_model=QueryResponse)
-async def play_taipei_query(request: QueryRequest):
+async def play_taipei_query(request: QueryRequest, http_request: FastAPIRequest):
     try:
         # 1. 篩選景點與獲取輿情
         best_pois = filter_pois(request.tags, request.context.weather, request.context.current_time)
@@ -204,8 +205,60 @@ async def play_taipei_query(request: QueryRequest):
         tts_url = None
         
         if ELEVENLABS_API_KEY and voice_script:
-            pass 
+            # 為了產生高品質的中文語音，建議使用 multilingual v2 模型
+            # 建立儲存音檔的目錄，路徑會是 <專案根目錄>/static/tts
+            STATIC_DIR = os.path.join(os.path.dirname(BASE_DIR), "static")
+            TTS_OUTPUT_DIR = os.path.join(STATIC_DIR, "tts")
+            os.makedirs(TTS_OUTPUT_DIR, exist_ok=True)
+
+            # 參考: https://elevenlabs.io/docs/speech-synthesis/models
+            TTS_MODEL_ID = "eleven_multilingual_v2"
             
+            # 這是一個常見的範例語音 ID ("Rachel")。
+            # 在正式環境中，您應該換成您自己 ElevenLabs 帳戶中的語音 ID。
+            # 您可以透過 /v1/voices API 端點來列出您可用的語音。
+            TTS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
+            
+            tts_api_url = f"https://api.elevenlabs.io/v1/text-to-speech/{TTS_VOICE_ID}"
+            
+            headers = {
+                "Accept": "audio/mpeg",
+                "Content-Type": "application/json",
+                "xi-api-key": ELEVENLABS_API_KEY
+            }
+            
+            data = {
+                "text": voice_script,
+                "model_id": TTS_MODEL_ID,
+                "voice_settings": {
+                    "stability": 0.5,
+                    "similarity_boost": 0.75
+                }
+            }
+            
+            try:
+                response = requests.post(tts_api_url, json=data, headers=headers)
+                response.raise_for_status()
+                
+                # 1. 產生一個獨一無二的檔案名稱
+                filename = f"{uuid.uuid4()}.mp3"
+                filepath = os.path.join(TTS_OUTPUT_DIR, filename)
+
+                # 2. 將 ElevenLabs 回傳的音訊內容寫入檔案
+                with open(filepath, "wb") as f:
+                    f.write(response.content)
+                
+                # 3. 產生一個前端可以存取的 URL
+                #    這需要主應用程式設定好靜態檔案路徑 (請見步驟 3)
+                tts_url = str(http_request.url_for('static', path=f'tts/{filename}'))
+
+                logger.info(f"TTS audio generated for session {request.session_id} at {tts_url}")
+
+            except requests.exceptions.RequestException as re:
+                logger.error(f"ElevenLabs API request failed: {re}")
+            except Exception as e:
+                logger.error(f"Failed to save or create URL for TTS audio: {e}")
+
         # 7. 組裝 Response
         return QueryResponse(
             translation=Translation(**result.get("translation", {"zh": "", "en": ""})),
