@@ -84,20 +84,33 @@ def filter_pois(tags: List[str], weather: str, current_time: str) -> List[Dict[s
     # 簡單模擬：如果下雨，偏向室內（博物館、百貨、地下街）
     is_rainy = weather.lower() == "rainy"
     
-    for name, en_name in TAIPEI_DICT.items():
+    if isinstance(TAIPEI_DICT, dict):
+        iterator = [{"name": k, "translation": v, "tags": []} for k, v in TAIPEI_DICT.items()]
+    else:
+        iterator = TAIPEI_DICT
+
+    for item in iterator:
+        name = item.get("name", "")
+        en_name = item.get("translation", "")
+        item_tags = item.get("tags", [])
         score = 0
+        
         # 關鍵字匹配
         for tag in tags:
-            if tag in name:
+            if tag in name or tag in item_tags:
                 score += 2
         
         # 天氣適配性 (模擬)
         if is_rainy:
-            if any(k in name for k in ["博物館", "地下街", "商場", "百貨", "寺"]):
+            if any(k in name for k in ["博物館", "地下街", "商場", "百貨", "寺", "室內"]):
                 score += 1
         else:
-            if any(k in name for k in ["公園", "步道", "山", "街"]):
+            if any(k in name for k in ["公園", "步道", "山", "街", "自然戶外"]):
                 score += 1
+                
+        # 若未提供任何 tag 則給予基本分以便展示
+        if not tags:
+            score += 1
         
         if score > 0:
             candidates.append({"name": name, "en_name": en_name, "score": score})
@@ -108,10 +121,14 @@ def filter_pois(tags: List[str], weather: str, current_time: str) -> List[Dict[s
 
 def get_social_context() -> str:
     """獲取熱門社交情緒摘要"""
-    if not SOCIAL_SENTIMENT:
+    if not SOCIAL_SENTIMENT: # Now works if it is list or dict
         return "目前無特別熱門話題。"
+        
+    trending = SOCIAL_SENTIMENT
+    if isinstance(SOCIAL_SENTIMENT, dict):
+        trending = SOCIAL_SENTIMENT.get("trending_topics", [])
     
-    summaries = [f"- {item['topic']}: {item['summary']}" for item in SOCIAL_SENTIMENT[:3]]
+    summaries = [f"- {item.get('topic', '')}: {item.get('summary', '')}" for item in trending[:3]]
     return "\n".join(summaries)
 
 # ==========================================
@@ -187,10 +204,7 @@ async def play_taipei_query(request: QueryRequest):
         tts_url = None
         
         if ELEVENLABS_API_KEY and voice_script:
-            # 此處為 ElevenLabs 整合範例，實務上可根據需求調整 voice_id
-            # 為了 demo，我們先回傳一個 mock URL 或實際打 API
-            # logger.info("Calling ElevenLabs TTS...")
-            pass # 這裡預留實作空間，或在 index.py 統一處理
+            pass 
             
         # 7. 組裝 Response
         return QueryResponse(
