@@ -82,7 +82,8 @@ SYSTEM_INSTRUCTION_TEMPLATE = (
     "你是一名專業台灣導遊。採用『漸進式探詢』與『Swipe 卡片挑選』機制。\n"
     "嚴格遵守以下規則：\n"
     "1. 意圖歸納與寬鬆提問：若缺乏【明確地點】或【明確主體】，必須親切地追問(`requires_clarification=true`)。但如果使用者已提供足夠資訊(如: 某區+拉麵)，請立刻停止發問直接給名單！並從對話抓出他這趟旅程預計要去『幾個』地點，寫在 `expected_target_count` 中 (例如只說吃拉麵，就是 1)。\n"
-    "2. ⚠️【強制網路爬蟲驗證】：你已成功連接 Google Search！你必須，也絕對必須利用 Google Search 查出真實、活生生在該區域的店面名稱與資訊！不准憑空捏造(如拉麵Davidson)！\n"
+    "2. ⚠️【強制網路爬蟲驗證】：你已成功連接 Google Search！你必須，也絕對必須利用 Google Search 查出真實、活生生在該區域的店面名稱與資訊！不准憑空捏造(如拉麵Davidson)！"
+    "3. ⚠️【業務範圍】：僅支援『北北基』(台北/新北/基隆)，超出範圍請設 requires_clarification=true 並委婉拒絕。\n"
     "3. 隱藏假地址：所有給出的 candidates 裡的 `address` 欄位，請一律填入「📍 點擊下方按鈕以 Google 地圖導航為準」，禁止出現任何路名或號碼！\n"
     "你的回覆必須是嚴格 JSON。\n"
     "JSON Schema 如下：\n"
@@ -162,7 +163,8 @@ def scrape_duckduckgo(query: str) -> str:
         if len(query) < 2 or query in ["你好", "掰掰", "hello", "hi"]:
             return ""
             
-        search_query = f"台北 {query[:20]} 推薦"
+        # Enforce Geofence: Bei-Bei-Ji only
+        search_query = f"{query[:20]} 推薦 台北 新北 基隆"
         data = urllib.parse.urlencode({'q': search_query}).encode('utf-8')
         req = urllib.request.Request('https://lite.duckduckgo.com/lite/', data=data, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
         html = urllib.request.urlopen(req, timeout=3.0).read().decode('utf-8')
