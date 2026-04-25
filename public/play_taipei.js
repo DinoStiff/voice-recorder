@@ -149,55 +149,25 @@ async function startRecording(e) {
     }
 }
 
-function stopRecording(e) {
-    e.preventDefault();
-    if(!isRecording) return;
-    mediaRecorder.stop();
-    isRecording = false;
-    setMicState(false);
-}
 
-async function handleUserInput(textInput, audioBlob) {
-    toggleMicButton(false);
+async function handleUserInput(textInput) {
+    if (!textInput || textInput.trim() === "") return;
     showStatus("AI 處理中...");
     
-    let userText = textInput;
-
-    if (audioBlob) {
-        if (audioBlob.size < 1000) {
-            showStatus("錄音時間太短，請按住重新說話！");
-            toggleMicButton(true);
-            return;
-        }
-        const formData = new FormData();
-        formData.append("audio", audioBlob, "recording.webm");
-        try {
-            const sttRes = await fetch("/api/stt", { method: "POST", body: formData });
-            const sttData = await sttRes.json();
-            if (sttData.status === "error") throw new Error("STT failed");
-            userText = sttData.text;
-        } catch(e) {
-            showError("語音辨識失敗");
-            toggleMicButton(true);
-            return;
-        }
-    }
-    
-    addChatBubble("user", userText);
+    addChatBubble("user", textInput);
 
     try {
         const gpsCoords = await getCurrentGPS();
         const currentTime = new Date().getHours() + ":" + String(new Date().getMinutes()).padStart(2, '0');
 
-        showStatus("AI 規劃行程中...");
-        const currentUserId = "dino"; 
+        showStatus("AI 分析您的需求中...");
         
-        const llmResToA = await fetch("/api/play_taipei/query", {
+        const llmRes = await fetch("/api/play_taipei/query", {
             method: "POST", headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-                user_text: userText, 
-                tags: selectedTags,
-                session_id: currentUserId,
+                user_text: textInput, 
+                tags: selectedTags, // will be empty string now since we removed the tags
+                session_id: "dino",
                 context: { 
                     lat: gpsCoords.lat, 
                     lng: gpsCoords.lng, 
@@ -206,151 +176,220 @@ async function handleUserInput(textInput, audioBlob) {
                 }
             })
         });
-        const llmFinalData = await llmResToA.json();
+        const llmFinalData = await llmRes.json();
 
         if (!llmFinalData || llmFinalData.status === "error" || llmFinalData.detail) {
             throw new Error("大腦運算失敗：" + (llmFinalData.detail || ""));
         }
 
-        // 把舊的字幕塞進 ChatBox，把行程 render timeline 給 ChatBox
-        let itineraryHtml = "";
-        if (llmFinalData.itinerary && llmFinalData.itinerary.length > 0) {
-             const tempDiv = document.createElement("div");
-             // use the global renderTimeline mechanism but inject directly to string
-             itineraryHtml = extractTimelineHTML(llmFinalData.itinerary, gpsCoords);
+        // --- NEW SWIPE LOGIC STUB ---
+        if (llmFinalData.requires_clarification) {
+            // Stage 1: AI needs to ask more questions
+            addChatBubble("ai", llmFinalData.voice_script || llmFinalData.translation.zh);
+            showStatus("請輸入您的回覆！");
+        } else {
+            // Stage 2: AI has collected enough constraints and generated pool
+            addChatBubble("ai", llmFinalData.voice_script || "我已經挑選出一些最棒的選項了，請從畫廊中確認！");
+            
+            // Render gallery
+            if(llmFinalData.swipe_candidates && llmFinalData.swipe_candidates.length > 0) {
+                renderGallery(llmFinalData.swipe_candidates);
+                showView('gallery-view');
+            } else {
+                 addChatBubble("ai", "抱歉，目前找不到符合您條件的地點。");
+                 showStatus("請更改條件後再試一次！");
+            }
         }
-
-        const aid = addChatBubble("ai", llmFinalData.translation.zh + " / " + llmFinalData.translation.en, true, itineraryHtml);
-
-        showStatus("為您語音播報...");
-        const ttsFormData = new FormData();
-        ttsFormData.append("voice_id", "21m00Tcm4TlvDq8ikWAM"); 
-        ttsFormData.append("text", llmFinalData.voice_script || llmFinalData.translation.en || "");
-
-        const ttsRes = await fetch("/api/tts", { 
-            method: "POST", 
-            body: ttsFormData 
-        });
-        
-        if (!ttsRes.ok) throw new Error(`TTS API 錯誤`);
-        
-        const mp3Blob = await ttsRes.blob();
-        
-        // mount audio player to DOM
-        const audioEl = document.createElement("audio");
-        audioEl.id = aid;
-        audioEl.src = URL.createObjectURL(mp3Blob);
-        document.body.appendChild(audioEl);
-        
-        window.togglePlay(aid);
-        showStatus("導覽完畢！有問題隨時問我！");
 
     } catch (e) {
         console.error(e);
         addChatBubble("ai", `發生異常：大腦運算失敗：${e.message}`);
         showStatus("發生異常：" + e.message);
-    } finally {
-        toggleMicButton(true);
     }
 }
 
-// Redirect processVoiceData
-async function processVoiceData() {
-    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-    if (mediaRecorder && mediaRecorder.stream) {
-        mediaRecorder.stream.getTracks().forEach(track => track.stop());
-    }
-    await handleUserInput("", audioBlob);
-}
 // ==========================================
 // Chat UI 歷史冒泡功能
 // ==========================================
-let currentAudio = null;
-
-function addChatBubble(sender, text, isAudio = false, itineraryHtml = "") {
+// ==========================================
+// Chat UI 歷史冒泡功能
+// ==========================================
+function addChatBubble(sender, text) {
     const historyBox = document.getElementById("chat-history");
-    const id = "audio-" + Date.now();
-    let innerContent = `<span>${text}</span>`;
-    
-    if (isAudio) {
-        innerContent = `
-        <div style="display:flex; align-items:center; gap:8px;">
-            <button id="btn-${id}" onclick="togglePlay('${id}')" style="background:#4b5563; border:none; width:30px; height:30px; border-radius:50%; color:white; cursor:pointer;">
-                <i class="fas fa-play"></i>
-            </button>
-            <span style="flex:1;">${text}</span>
-        </div>`;
-    }
-    
-    // 如果有行程推薦，把它串接在文字後面
-    if (itineraryHtml !== "") {
-        innerContent += itineraryHtml;
-    }
-
     const div = document.createElement("div");
+    
+    // HTML Entity parsing layer effectively handles line breaks
+    let formattedText = text.replace(/
+/g, '<br>');
+
     if (sender === "user") {
         div.style.alignSelf = "flex-end";
         div.style.background = "#dbeafe";
         div.style.color = "#1e3a8a";
-        div.innerHTML = `<i class="fas fa-user"></i> ${innerContent}`;
+        div.innerHTML = `<i class="fas fa-user"></i> <span>${formattedText}</span>`;
     } else {
         div.style.alignSelf = "flex-start";
         div.style.background = "#f3f4f6";
         div.style.color = "#1f2937";
-        div.innerHTML = `<i class="fas fa-robot"></i> ${innerContent}`;
+        div.innerHTML = `<i class="fas fa-robot"></i> <span>${formattedText}</span>`;
     }
+    
     div.style.padding = "10px 15px";
     div.style.borderRadius = "20px";
     div.style.maxWidth = "80%";
     div.style.wordBreak = "break-word";
     
-    // AI 泡泡需要儲存 Audio ID 屬性
-    if (isAudio) {
-        div.setAttribute("data-audio-id", id);
-    }
-    
     historyBox.appendChild(div);
     historyBox.scrollTop = historyBox.scrollHeight;
-    return id;
 }
 
-window.togglePlay = function(id) {
-    const audioEl = document.getElementById(id);
-    const btn = document.getElementById("btn-" + id);
-    
-    if (currentAudio && currentAudio !== audioEl) {
-        currentAudio.pause();
-        const prevBtn = document.getElementById("btn-" + currentAudio.id);
-        if(prevBtn) prevBtn.innerHTML = '<i class="fas fa-play"></i>';
-    }
-    
-    if (audioEl.paused) {
-        audioEl.play();
-        btn.innerHTML = '<i class="fas fa-pause"></i>';
-        currentAudio = audioEl;
-    } else {
-        audioEl.pause();
-        btn.innerHTML = '<i class="fas fa-play"></i>';
-        currentAudio = null;
-    }
-    
-    audioEl.onended = () => {
-        btn.innerHTML = '<i class="fas fa-play"></i>';
-        currentAudio = null;
-    };
-};
-
+// 視圖切換函數
+function showView(viewId) {
+    const views = ['chat-view', 'gallery-view', 'swipe-view', 'itinerary-view'];
+    views.forEach(v => {
+        document.getElementById(v).style.display = (v === viewId) ? (v==='gallery-view'?'block':(v==='swipe-view'?'flex':'block')) : 'none';
+        if (v === viewId && document.getElementById(v).style.display === 'block' && v === 'swipe-view') {
+           document.getElementById(v).style.display = 'flex'; // swipe view needs flex
+        }
+    });
+}
 // ==========================================
-// 綁定文字與錄音多重輸入
+// 綁定文字
+與錄音多重輸入
 // ==========================================
 document.getElementById('send-button').addEventListener('click', () => {
     const textInput = document.getElementById('text-input');
     const text = textInput.value.trim();
     if (text) {
         textInput.value = '';
-        handleUserInput(text, null); // process text command
+        handleUserInput(text);
     }
 });
 document.getElementById('text-input').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') document.getElementById('send-button').click();
 });
+
+// ==========================================
+// SWIPE UI STATES & LOGIC
+// ==========================================
+window.swipeCandidates = [];
+window.likedVenues = [];
+window.currentIndex = 0;
+
+function renderGallery(candidates) {
+    window.swipeCandidates = candidates;
+    const container = document.getElementById("gallery-container");
+    container.innerHTML = "";
+    candidates.forEach(poi => {
+        const html = `
+        <div style="background: white; border-radius: 8px; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-top: 4px solid #2563eb;">
+           <h4 style="margin: 0 0 10px 0; color: #1e3a8a;">${poi.name}</h4>
+           <div style="font-size: 0.8rem; margin-bottom: 8px; color: #4b5563;">💰 ${poi.price || '未知'} | 🚶 ${poi.distance || '未知'}</div>
+           <p style="font-size: 0.8rem; color: #6b7280; line-height: 1.4; margin: 0;">${(poi.description||'').substring(0, 45)}...</p>
+        </div>`;
+        container.innerHTML += html;
+    });
+}
+
+function startSwipePhase() {
+    window.currentIndex = 0;
+    window.likedVenues = [];
+    document.getElementById('swipe-stats').innerText = `進度：0 選中 / 已看 0 張`;
+    showView('swipe-view');
+    renderCurrentCard();
+}
+
+function renderCurrentCard() {
+    const stack = document.getElementById('card-stack');
+    stack.innerHTML = "";
+
+    if (window.currentIndex >= window.swipeCandidates.length) {
+        stack.innerHTML = `
+            <div style="text-align: center; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+                <h3 style="color: #1e40af; margin-bottom: 10px;"><i class="fas fa-flag-checkered"></i> 牌組滑完了！</h3>
+                <p>您總共挑選了 <strong>${window.likedVenues.length}</strong> 個想去的地方！</p>
+                <button onclick="generateFinalItinerary()" style="margin-top: 20px; width: 100%; padding: 15px; background: #10b981; color: white; border: none; border-radius: 12px; font-size: 1.1rem; cursor: pointer;">生成我的完美行程表 ✨</button>
+            </div>
+        `;
+        document.querySelector("#swipe-view > div:nth-child(2)").style.display = "none"; // Hide buttons
+        return;
+    }
+
+    document.querySelector("#swipe-view > div:nth-child(2)").style.display = "flex"; // Show buttons
+
+    const poi = window.swipeCandidates[window.currentIndex];
+    stack.innerHTML = `
+        <div id="swipe-card-ui" style="width: 90%; max-width: 400px; height: 95%; background: white; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.2); display: flex; flex-direction: column; overflow: hidden; transition: transform 0.3s, opacity 0.3s;">
+            <div style="background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white; padding: 20px;">
+                <h2 style="margin: 0; font-size: 1.4rem;">${poi.name}</h2>
+            </div>
+            <div style="padding: 20px; flex: 1; display: flex; flex-direction: column;">
+                <div style="background: #eff6ff; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                    <p style="margin: 5px 0; color: #1e40af;"><strong>🕒 建議停留：</strong>${poi.time || '未知'}</p>
+                    <p style="margin: 5px 0; color: #1e40af;"><strong>💰 價格帶：</strong>${poi.price || '未知'}</p>
+                    <p style="margin: 5px 0; color: #1e40af;"><strong>🚶 距離：</strong>${poi.distance || '未知'}</p>
+                </div>
+                <div style="flex: 1; overflow-y: auto;">
+                    <p style="line-height: 1.6; color: #374151; font-size: 0.95rem;">${poi.description}</p>
+                    <p style="font-size: 0.85rem; color: #6b7280; margin-top: 20px; padding-top: 15px; border-top: 1px dashed #d1d5db;"><i class="fas fa-map-marker-alt"></i> ${poi.address}</p>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function handleSwipe(direction) {
+    const card = document.getElementById("swipe-card-ui");
+    const poi = window.swipeCandidates[window.currentIndex];
+    
+    // Add quick animation
+    if (card) {
+        if (direction === 'left') {
+            card.style.transform = "translateX(-150%) rotate(-15deg)";
+            card.style.opacity = "0";
+        } else {
+            card.style.transform = "translateX(150%) rotate(15deg)";
+            card.style.opacity = "0";
+        }
+    }
+    
+    if (direction === 'right') {
+        window.likedVenues.push(poi);
+    }
+    
+    window.currentIndex++;
+    document.getElementById('swipe-stats').innerText = `進度：${window.likedVenues.length} 選中 / 已看 ${window.currentIndex} 張`;
+    
+    setTimeout(() => {
+        renderCurrentCard();
+    }, 300);
+}
+
+window.startSwipePhase = startSwipePhase;
+window.handleSwipe = handleSwipe;
+window.generateFinalItinerary = async function() {
+    showStatus("正在幫您規劃完美動線...");
+    
+    try {
+        const schedRes = await fetch("/api/play_taipei/schedule_itinerary", {
+            method: "POST", headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                liked_venues: window.likedVenues,
+                context: { lat: 25.0422, lng: 121.5355, current_time: "09:00", weather: "Sunny" }
+            })
+        });
+        const finalData = await schedRes.json();
+        
+        if (finalData.swipe_candidates && finalData.swipe_candidates.length > 0) {
+            const gpsCoords = await getCurrentGPS().catch(() => ({ lat: 25.0422, lng: 121.5355 }));
+            const itineraryHtml = extractTimelineHTML(finalData.swipe_candidates, gpsCoords);
+            document.getElementById("itinerary-display").innerHTML = itineraryHtml;
+            showView('itinerary-view');
+            showStatus("行程表準備就緒！");
+        } else {
+            throw new Error("無法生成行程");
+        }
+    } catch(e) {
+        showStatus("行程生成失敗：" + e.message);
+    }
+};

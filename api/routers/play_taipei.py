@@ -46,8 +46,7 @@ class QueryResponse(BaseModel):
     requires_clarification: bool = False
     translation: Translation
     voice_script: str
-    tts_audio_url: Optional[str] = None
-    itinerary: List[ItineraryItem]
+    swipe_candidates: List[ItineraryItem]
 
 # ==========================================
 # 2. Configuration & Memory
@@ -83,14 +82,15 @@ SYSTEM_INSTRUCTION_TEMPLATE = (
     "嚴格遵守以下規則：\n"
     "1. 如果候選清單中「完全沒有」符合使用者需求(例如想找拉麵、特定異國料理、稀有景點)的選項，請**跳脫候選名單**！請直接動用你內建的 Google Maps 地理知識庫，推薦附近真實存在、且評價很高的店家！千萬不可拿名單內無關的東西硬湊！\n"
     "2. 【要求安排『行程/一日遊』】：請務必填寫具體的『時間(time)』(如早上10:00、中午用餐)，並安插『美食/餐廳』，不能只丟出幾個景點，必須是連續且充實的一天。\n"
-    "3. 【主動討論行程】：如果使用者的需求非常模糊(例如：沒說預算、沒說想吃什麼料理)，請務必將 `requires_clarification` 設為 true，並在 voice_script 中**主動提問**引導(例如: '<聲音腳本> 請問預算大約多少？有偏好的食物嗎？')，行程 itinerary 則維持空列表 []，直到使用者給予充足資訊！！你現在是個對話機器人，可以來回互動！！\n"
+    "3. 【主動討論行程】：如果使用者的需求非常模糊(例如：沒說預算、沒說想去幾個景點、想吃幾餐)，請務必將 `requires_clarification` 設為 true，並在 voice_script 中**主動提問**引導(例如: '<聲音腳本> 請問預算大約多少？預計要排幾個點呢？')，這時 swipe_candidates 請給空列表 []。\n"
     "4. 你的回覆必須是嚴格的 JSON 格式。\n"
     "JSON Schema 如下：\n"
     "{\n"
-    "  \"translation\": {\"zh\": \"對用戶輸入的中文翻譯\", \"en\": \"對用戶輸入的英文翻譯\"},\n"
-    "  \"voice_script\": \"要給觀光客聽的導遊口說台詞\",\n"
-    "  \"itinerary\": [\n"
-    "    {\"time\": \"時間\", \"name\": \"景點/餐廳\", \"price\": \"估計價格帶(如: 150-300元)\", \"distance\": \"交通預估(如: 步行5分鐘)\", \"description\": \"為何推薦\", \"address\": \"地址\", \"image_url\": \"\"}\n"
+    "  \"requires_clarification\": true或false,\n"
+    "  \"translation\": {\"zh\": \"精確解讀中文(若需致歉在此)\", \"en\": \"英文翻譯\"}\n,"
+    "  \"voice_script\": \"熱情但不廢話的回覆。若 requires_clarification=true，請在此發問。若收集完畢，說這是我幫你整理的候選名單！\",\n"
+    "  \"swipe_candidates\": [\n"
+    "    {\"time\": \"推薦停留多久(如: 1.5小時)\", \"name\": \"景點/餐廳\", \"price\": \"估計價格帶(如: 150-300元)\", \"distance\": \"距離\", \"description\": \"為何推薦\", \"address\": \"地址\", \"image_url\": \"圖片網址\"}\n" 
     "  ]\n"
     "}\n"
     "規則：\n"
@@ -217,13 +217,13 @@ async def play_taipei_query(request: QueryRequest, http_request: FastAPIRequest)
             import os
             
             new_pois_added = False
-            if "itinerary" in result and isinstance(result["itinerary"], list):
+            if "swipe_candidates" in result and isinstance(result["swipe_candidates"], list):
                 if isinstance(TAIPEI_DICT, dict):
                     dict_names = list(TAIPEI_DICT.keys())
                 else:
                     dict_names = [p.get("name", "") for p in TAIPEI_DICT]
                 
-                for item in result["itinerary"]:
+                for item in result["swipe_candidates"]:
                     p_name = item.get("name")
                     if p_name and p_name not in dict_names:
                         new_entry = {"name": p_name, "translation": item.get("en", p_name), "tags": ["🤖 AI推薦"]}
@@ -324,12 +324,61 @@ async def play_taipei_query(request: QueryRequest, http_request: FastAPIRequest)
             requires_clarification=result.get("requires_clarification", False),
             translation=Translation(**result.get("translation", {"zh": "", "en": ""})),
             voice_script=voice_script,
-            itinerary=[ItineraryItem(**item) for item in result.get("itinerary", [])],
-            tts_audio_url=None
+            swipe_candidates=[ItineraryItem(**item) for item in result.get("swipe_candidates", [])],
         )
         
     except Exception as e:
         import traceback
         traceback.print_exc()
         logger.error(f"Error in play_taipei_query: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==========================================
+# 4. Schedule Final Itinerary Endpoint
+# ==========================================
+
+class ScheduleRequest(BaseModel):
+    liked_venues: List[ItineraryItem]
+    context: ContextData = Field(default_factory=ContextData)
+
+# We will reuse QueryResponse but this time swipe_candidates will hold the chronological itinerary
+# to save time redefining schemas. We will just tell the LLM to output the timeline inside "swipe_candidates".
+
+@router.post("/schedule_itinerary", response_model=QueryResponse)
+async def schedule_itinerary(request: ScheduleRequest):
+    try:
+        venue_str = "\n".join([f"- {v.name}: {v.description}" for v in request.liked_venues])
+        
+        system_prompt = (
+            "你是一名專業行程規劃師。使用者已經選出了他們想去的景點/餐廳列表，請幫他們安排出合理的『一日遊行程表』。\n"
+            "請為每個地點安排具體的拜訪時間(time)，並在備註中加入交通建議。\n"
+            f"使用者選定的景點如下：\n{venue_str}\n\n"
+            "你的回覆必須是嚴格的 JSON 格式。\n"
+            "JSON Schema 如下：\n"
+            "{\n"
+            "  \"requires_clarification\": false,\n"
+            "  \"translation\": {\"zh\": \"這是為您精心規劃的行程表！\", \"en\": \"Here is your itinerary!\"},\n"
+            "  \"voice_script\": \"行程已經為您排好囉！請看下方的時間表。\",\n"
+            "  \"swipe_candidates\": [\n"
+            "    {\"time\": \"開始時間 (如: 09:00)\", \"name\": \"景點/餐廳名稱\", \"price\": \"價格\", \"distance\": \"交通/步行預估\", \"description\": \"你對此安排的簡短導覽\", \"address\": \"地址\", \"image_url\": \"\"}\n"
+            "  ]\n"
+            "}\n"
+            "注意：請確保所有使用者選定的景點都被納入 schedule 中(放進 swipe_candidates 陣列裡)！"
+        )
+        
+        response = GUIDE_MODEL.generate_content(system_prompt)
+        ai_raw_response = response.text
+        
+        result = json.loads(ai_raw_response)
+        
+        return QueryResponse(
+            requires_clarification=False,
+            translation=Translation(**result.get("translation", {"zh": "這是您的最終行程表", "en": "Final Itinerary"})),
+            voice_script=result.get("voice_script", "行程排好囉！"),
+            swipe_candidates=[ItineraryItem(**item) for item in result.get("swipe_candidates", [])],
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
