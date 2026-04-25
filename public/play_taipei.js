@@ -318,7 +318,12 @@ function renderCurrentCard() {
                 <div style="text-align: center; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
                     <h3 style="color: #1e40af; margin-bottom: 10px;"><i class="fas fa-flag-checkered"></i> 牌組滑完了！</h3>
                     <p>您總共挑選了 <strong>${window.likedVenues.length}</strong> 個想去的地方！</p>
-                    <button onclick="generateFinalItinerary()" style="margin-top: 20px; width: 100%; padding: 15px; background: #10b981; color: white; border: none; border-radius: 12px; font-size: 1.1rem; cursor: pointer;">生成我的完美行程表 ✨</button>
+                    ${ (parseInt(sessionStorage.getItem("targetCount")) > 0 && window.likedVenues.length > parseInt(sessionStorage.getItem("targetCount"))) ? 
+                    `<p style="color: #ea580c; font-size: 0.9rem;">您原本只計畫去 ${parseInt(sessionStorage.getItem("targetCount"))} 家，但多選了！要不要精簡一下？</p>
+                     <button onclick="startTournament()" style="margin-top: 10px; width: 100%; padding: 15px; background: #6366f1; color: white; border: none; border-radius: 12px; font-size: 1.1rem; cursor: pointer;"><i class="fas fa-khanda"></i> 啟動 1v1 淘汰賽</button>
+                     <button onclick="pickRandom()" style="margin-top: 10px; width: 100%; padding: 15px; background: #f59e0b; color: white; border: none; border-radius: 12px; font-size: 1.1rem; cursor: pointer;"><i class="fas fa-dice"></i> 閉著眼睛隨機挑</button>
+                     <button onclick="generateFinalItinerary()" style="margin-top: 10px; width: 100%; padding: 15px; background: #9ca3af; color: white; border: none; border-radius: 12px; font-size: 0.95rem; cursor: pointer;">不管啦我全都要去</button>` 
+                    : `<button onclick="generateFinalItinerary()" style="margin-top: 20px; width: 100%; padding: 15px; background: #10b981; color: white; border: none; border-radius: 12px; font-size: 1.1rem; cursor: pointer;">生成我的完美行程表 ✨</button>` }
                 </div>
             `;
         }
@@ -407,3 +412,78 @@ window.generateFinalItinerary = async function() {
         showStatus("行程生成失敗：" + e.message);
     }
 };
+
+// ==========================================
+// 1V1 ELIMINATION TOURNAMENT LOGIC
+// ==========================================
+window.tournamentQueue = [];
+window.tournamentWinners = [];
+window.tournamentTarget = 1;
+
+window.pickRandom = function() {
+    let target = parseInt(sessionStorage.getItem("targetCount")) || 1;
+    let shuffled = [...window.likedVenues].sort(() => 0.5 - Math.random());
+    window.likedVenues = shuffled.slice(0, target);
+    generateFinalItinerary();
+};
+
+window.startTournament = function() {
+    window.tournamentQueue = [...window.likedVenues];
+    window.tournamentWinners = [];
+    window.tournamentTarget = parseInt(sessionStorage.getItem("targetCount")) || 1;
+    document.getElementById('swipe-stats').innerHTML = `<strong>⚔️ 淘汰賽進行中</strong>`;
+    renderTournamentCard();
+};
+
+function buildTourneyCard(poi, side) {
+    return `
+        <div onclick="winTournament('${side}')" style="background: white; border-radius: 15px; border: 3px solid ${side==='left'?'#ef4444':'#3b82f6'}; padding: 15px; margin-bottom: 5px; flex: 1; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h3 style="margin:0 0 5px 0; color: #1f2937;">${poi.name}</h3>
+            <p style="margin: 0; font-size: 0.8rem; color: #4b5563;">💰 ${poi.price} | 🚶 ${poi.distance}</p>
+            <p style="margin: 5px 0 0 0; font-size: 0.75rem; color: #6b7280;"> ${(poi.description||'').substring(0,60)}... </p>
+            <div style="font-weight: bold; margin-top: 5px; color: ${side==='left'?'#ef4444':'#3b82f6'};">👉 選擇這家</div>
+        </div>
+    `;
+}
+
+window.winTournament = function(side) {
+    if (side === 'left') {
+        window.tournamentWinners.push(window.lastLeftPoi);
+    } else {
+        window.tournamentWinners.push(window.lastRightPoi);
+    }
+    renderTournamentCard();
+};
+
+function renderTournamentCard() {
+    const stack = document.getElementById('card-stack');
+    
+    if (window.tournamentQueue.length === 0) {
+        if (window.tournamentWinners.length <= window.tournamentTarget) {
+            window.likedVenues = [...window.tournamentWinners];
+            generateFinalItinerary();
+            return;
+        }
+        window.tournamentQueue = [...window.tournamentWinners];
+        window.tournamentWinners = [];
+    }
+    
+    if (window.tournamentQueue.length === 1) {
+        window.tournamentWinners.push(window.tournamentQueue.pop());
+        renderTournamentCard();
+        return;
+    }
+    
+    window.lastLeftPoi = window.tournamentQueue.pop();
+    window.lastRightPoi = window.tournamentQueue.pop();
+    
+    stack.innerHTML = `
+        <div style="display:flex; flex-direction: column; width: 95%; max-width: 400px; height: 90%; gap: 10px;">
+            <div style="text-align: center; color: white; background: #1e3a8a; padding: 10px; border-radius: 10px; font-weight: bold;">淘汰賽二選一！請點擊勝出者</div>
+            ${buildTourneyCard(window.lastLeftPoi, 'left')}
+            <div style="text-align:center; font-weight:900; color:#ef4444; font-size: 1.2rem;">VS</div>
+            ${buildTourneyCard(window.lastRightPoi, 'right')}
+        </div>
+    `;
+    document.querySelector("#swipe-view > div:nth-child(2)").style.display = "none";
+}
