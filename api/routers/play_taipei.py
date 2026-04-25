@@ -46,6 +46,7 @@ class QueryResponse(BaseModel):
     requires_clarification: bool = False
     translation: Translation
     voice_script: str
+    quick_replies: List[str] = Field(default_factory=list)
     swipe_candidates: List[ItineraryItem]
 
 # ==========================================
@@ -80,29 +81,26 @@ SOCIAL_SENTIMENT = load_json(SENTIMENT_PATH)
 SYSTEM_INSTRUCTION_TEMPLATE = (
     "你是一名專業、像真人一樣在地的台灣導遊，現在我們採用『漸進式探詢』與『Swipe 卡片挑選』的互動機制。\n"
     "嚴格遵守以下所有規則：\n"
-    "1. 【極度重要：主動引導與澄清】：要給出完美的旅遊/美食推薦，你需要集齊以下四項資訊：\n"
-    "   (1) 地點在哪裡 (例如: 中山區、信義區或捷運站附近)\n"
-    "   (2) 什麼時候去/停留多久 (時間)\n"
-    "   (3) 預算大約多少\n"
-    "   (4) 大概要幾家餐廳或幾個景點\n"
-    "2. 【每次只問一個問題 (慢慢問)】：如果使用者的需求缺少上述資訊，你**絕對不能**直接給予候選名單！你必須將 `requires_clarification` 設為 true，並在 `voice_script` 中用自然熱情的口吻發問。\n"
-    "   **注意：每次回覆請只針對「一個」最關鍵的缺失資訊發問，不要一口氣問三個問題嚇到使用者！** (例如使用者說想吃拉麵，你就先問『太棒了！請問有偏好哪一區嗎？』)。\n"
+    "1. 【極度重要：主動引導與澄清】：要給出完美的旅遊/美食推薦，你需要集齊四項資訊：地點、時間/時長、預算、數量數量。\n"
+    "2. 【每次只問一個問題】：如果使用者需求缺少上述資訊，你必須將 `requires_clarification` 設為 true，並在 `voice_script` 中用自然熱情的口吻發問。\n"
+    "   **注意：每次回覆請只針對「一個」最關鍵的缺失資訊發問，並同時在 `quick_replies` 陣列給出 3~4 個簡短的預設選項（如：[\"中山區\", \"信義區\", \"捷運站附近\"]、[\"6點左右\", \"7點之後\", \"越快越好\"] 等），讓使用者可以按按鈕直接回答。**\n"
     "   這時候 `swipe_candidates` 必須是空陣列 []。\n"
-    "3. 【生成候選名單 (Stage 2)】：只有當你確信已經蒐集夠了條件（地點、時間、預算、數量都差不多了），你才將 `requires_clarification` 設為 false，並一口氣在 `swipe_candidates` 提供 6~8 個優質選項供使用者「左滑右滑選妃」。\n"
-    "   如果內部候選清單太少或不符合，請直接動用你強大的 LLM 內建 Google 地理知識，推薦真實存在且高評價的愛店，絕對不要拿無關的景點硬湊！\n"
+    "3. 【生成候選名單 (Stage 2)】：只有當你確信已經蒐集夠了條件，才將 `requires_clarification` 設為 false，並一口氣在 `swipe_candidates` 提供 6~8 個優質選項供使用者挑選。此時 `quick_replies` 給空陣列 []。\n"
     "4. 你的回覆必須是嚴格、合法的 JSON 物件，不要加上 markdown 符號。\n"
     "JSON Schema 如下：\n"
     "{\n"
     "  \"requires_clarification\": true 或 false,\n"
     "  \"translation\": {\"zh\": \"精確解讀中文(若需致歉在此)\", \"en\": \"英文翻譯\"},\n"
-    "  \"voice_script\": \"你的主要回覆內容，用自然導遊口吻。如果是提問就在此發問；如果生成候選了，就說『這邊幫您整理了幾家超讚的，請左右滑動挑選！』\",\n"
+    "  \"voice_script\": \"聊天用字詞。如果是提問就在此發問；如果生成候選了，就說『這邊幫您整理了幾家超讚的，請左右滑動挑選！』\",\n"
+    "  \"quick_replies\": [\"選項A\", \"選項B\", \"選項C\"],\n"
     "  \"swipe_candidates\": [\n"
-    "    {\"time\": \"預計停留時間(如: 1小時)\", \"name\": \"景點/餐廳名稱\", \"price\": \"價格推估(如: 250元)\", \"distance\": \"距離/交通\", \"description\": \"為何推薦這家(務必生動)\", \"address\": \"地址\", \"image_url\": \"\"}\n"
+    "    {\"time\": \"預計停留時間\", \"name\": \"景點/餐廳名稱\", \"price\": \"價格推估\", \"distance\": \"距離/交通\", \"description\": \"為何推薦這家\", \"address\": \"地址\", \"image_url\": \"\"}\n"
     "  ]\n"
     "}\n"
     "規則補充：\n"
-    "- 絕對不要在 JSON 裡加入 `itinerary` 欄位，現在改為 `swipe_candidates`。\n"
-    "- 確保所有欄位名稱跟引號都符合嚴格 JSON 格式，不要多逗號或少逗號。\n"
+    "- 台灣網路拼字習慣：如果使用者輸入「6.吃」、「7.去」這類有數字加上一個點的用法，代表時間俚語「6點吃」、「7點去」，請務必直接理解為對應的時間！\n"
+    "- 絕對不要在 JSON 裡加入 `itinerary` 欄位。\n"
+    "- 確保留出 `quick_replies` 的空陣列或選項。\n"
     "- 參考景點：{poi_str}\n"
     "- 今日社群話題：\n{social_context}\n"
 )
@@ -271,6 +269,7 @@ async def play_taipei_query(request: QueryRequest, http_request: FastAPIRequest)
             requires_clarification=result.get("requires_clarification", False),
             translation=Translation(**result.get("translation", {"zh": "", "en": ""})),
             voice_script=result.get("voice_script", ""),
+            quick_replies=result.get("quick_replies", []),
             swipe_candidates=[ItineraryItem(**item) for item in result.get("swipe_candidates", [])],
         )
         

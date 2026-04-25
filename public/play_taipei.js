@@ -155,7 +155,41 @@ async function handleUserInput(textInput) {
         if (llmFinalData.requires_clarification) {
             // Stage 1: AI needs to ask more questions
             addChatBubble("ai", llmFinalData.voice_script || llmFinalData.translation.zh);
-            showStatus("請輸入您的回覆！");
+            
+            // QUICK REPLIES INJECTION
+            if (llmFinalData.quick_replies && llmFinalData.quick_replies.length > 0) {
+                const qrContainer = document.createElement("div");
+                qrContainer.className = "quick-replies-container";
+                qrContainer.style.display = "flex";
+                qrContainer.style.gap = "8px";
+                qrContainer.style.flexWrap = "wrap";
+                qrContainer.style.margin = "5px 0 15px 10px";
+                llmFinalData.quick_replies.forEach(reply => {
+                    const btn = document.createElement("button");
+                    btn.innerText = reply;
+                    btn.style.padding = "6px 14px";
+                    btn.style.borderRadius = "20px";
+                    btn.style.border = "1px solid #3b82f6";
+                    btn.style.background = "#eff6ff";
+                    btn.style.color = "#1d4ed8";
+                    btn.style.cursor = "pointer";
+                    btn.style.fontSize = "0.9rem";
+                    btn.style.transition = "background 0.2s";
+                    btn.onmouseover = () => btn.style.background = "#dbeafe";
+                    btn.onmouseout = () => btn.style.background = "#eff6ff";
+                    btn.onclick = () => {
+                        // Remov the pills after click to prevent spam
+                        qrContainer.remove();
+                        document.getElementById('text-input').value = reply;
+                        document.getElementById('send-button').click();
+                    };
+                    qrContainer.appendChild(btn);
+                });
+                document.getElementById("chat-history").appendChild(qrContainer);
+                document.getElementById("chat-history").scrollTop = document.getElementById("chat-history").scrollHeight;
+            }
+            
+            showStatus("請點擊選項或輸入您的回覆！");
         } else {
             // Stage 2: AI has collected enough constraints and generated pool
             addChatBubble("ai", llmFinalData.voice_script || "我已經挑選出一些最棒的選項了，請從畫廊中確認！");
@@ -271,13 +305,23 @@ function renderCurrentCard() {
     stack.innerHTML = "";
 
     if (window.currentIndex >= window.swipeCandidates.length) {
-        stack.innerHTML = `
-            <div style="text-align: center; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
-                <h3 style="color: #1e40af; margin-bottom: 10px;"><i class="fas fa-flag-checkered"></i> 牌組滑完了！</h3>
-                <p>您總共挑選了 <strong>${window.likedVenues.length}</strong> 個想去的地方！</p>
-                <button onclick="generateFinalItinerary()" style="margin-top: 20px; width: 100%; padding: 15px; background: #10b981; color: white; border: none; border-radius: 12px; font-size: 1.1rem; cursor: pointer;">生成我的完美行程表 ✨</button>
-            </div>
-        `;
+        if (window.likedVenues.length === 0) {
+            stack.innerHTML = `
+                <div style="text-align: center; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+                    <h3 style="color: #ef4444; margin-bottom: 10px;"><i class="fas fa-times-circle"></i> 都不喜歡嗎？</h3>
+                    <p>沒有選中任何地點，沒關係！</p>
+                    <button onclick="document.getElementById('text-input').value = '這批不喜歡！請給我完全不同的新選項！'; document.getElementById('send-button').click(); showView('chat-view');" style="margin-top: 20px; width: 100%; padding: 15px; background: #3b82f6; color: white; border: none; border-radius: 12px; font-size: 1.1rem; cursor: pointer;">為我重刷一批！ 🔄</button>
+                </div>
+            `;
+        } else {
+            stack.innerHTML = `
+                <div style="text-align: center; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+                    <h3 style="color: #1e40af; margin-bottom: 10px;"><i class="fas fa-flag-checkered"></i> 牌組滑完了！</h3>
+                    <p>您總共挑選了 <strong>${window.likedVenues.length}</strong> 個想去的地方！</p>
+                    <button onclick="generateFinalItinerary()" style="margin-top: 20px; width: 100%; padding: 15px; background: #10b981; color: white; border: none; border-radius: 12px; font-size: 1.1rem; cursor: pointer;">生成我的完美行程表 ✨</button>
+                </div>
+            `;
+        }
         document.querySelector("#swipe-view > div:nth-child(2)").style.display = "none"; // Hide buttons
         return;
     }
