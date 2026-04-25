@@ -77,6 +77,18 @@ async function processVoiceData() {
     showStatus("AI 辨識與翻譯中...");
     
     const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+
+    // ✨ Cleanup microphone stream track to free hardware
+    if (mediaRecorder && mediaRecorder.stream) {
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    }
+
+    if (audioBlob.size < 1000) {
+        showStatus("錄音時間太短，請按住重新說話！");
+        toggleMicButton(true);
+        return;
+    }
+
     const formData = new FormData();
     formData.append("audio", audioBlob, "recording.webm");
 
