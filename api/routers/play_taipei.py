@@ -211,7 +211,7 @@ async def play_taipei_query(request: QueryRequest, http_request: FastAPIRequest)
             result = json.loads(ai_raw_response)
             
             # --- 動態反哺寫入機制 ---
-            from api.index import TAIPEI_DICT
+            from api.index import LOCAL_DICT as TAIPEI_DICT
             import os
             
             new_pois_added = False
