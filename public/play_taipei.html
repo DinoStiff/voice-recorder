@@ -36,10 +36,9 @@
             </div>
         </div>
 
-        <!-- 雙向翻譯字幕看板 -->
-        <div id="subtitle-board" class="subtitle-board glass-panel" style="display: none;">
-            <div class="lang-source" id="sub-zh"></div>
-            <div class="lang-translated" id="sub-en"></div>
+        <!-- 聊天室歷史記錄區塊 -->
+        <div id="chat-history" class="chat-history" style="height: 300px; overflow-y: auto; background: rgba(255,255,255,0.5); border-radius: 12px; padding: 15px; margin-top: 15px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px;">
+             <!-- 對話泡泡會動態塞在這裡 -->
         </div>
 
         <!-- 垂直時間軸展演區 -->
@@ -50,10 +49,15 @@
         <!-- 全局狀態提示文字 -->
         <div id="status-text" class="status-text">想去哪裡玩？按住麥克風告訴我！</div>
 
-        <!-- 巨型錄音按鈕區塊 -->
-        <div class="mic-container">
-            <button id="record-button" class="record-button">
-                <i class="fas fa-microphone"></i>
+        <!-- 綜合輸入區塊 (文字 + 語音) -->
+        <div class="input-container" style="display: flex; align-items: center; gap: 10px; background: white; border-radius: 30px; padding: 5px 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+            <input type="text" id="text-input" placeholder="輸入你想去哪裡？..." style="flex: 1; border: none; outline: none; font-size: 1rem; padding: 10px; background: transparent;">
+            
+            <button id="send-button" style="background: #2563eb; color: white; border: none; border-radius: 50%; width: 45px; height: 45px; cursor: pointer; display: flex; justify-content: center; align-items: center; transition: background 0.3s; flex-shrink: 0;">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+            <button id="record-button" class="record-button" style="background: #2563eb; color: white; border: none; border-radius: 50%; width: 45px; height: 45px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; transition: background 0.3s; flex-shrink: 0;">
+                 <i class="fas fa-microphone"></i>
             </button>
         </div>
     </div>
