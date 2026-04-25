@@ -163,8 +163,8 @@ def scrape_duckduckgo(query: str) -> str:
         if len(query) < 2 or query in ["你好", "掰掰", "hello", "hi"]:
             return ""
             
-        # Enforce Geofence: Bei-Bei-Ji only
-        search_query = f"{query[:20]} 推薦 台北 新北 基隆"
+        # Enforce Geofence & Recency & Viability
+        search_query = f"{query[:20]} 2024 最新 仍在營業 推薦 台北 新北 基隆"
         data = urllib.parse.urlencode({'q': search_query}).encode('utf-8')
         req = urllib.request.Request('https://lite.duckduckgo.com/lite/', data=data, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
         html = urllib.request.urlopen(req, timeout=3.0).read().decode('utf-8')
@@ -257,12 +257,7 @@ async def play_taipei_query(request: QueryRequest, http_request: FastAPIRequest)
         
         try:
             result = json.loads(clean_json)
-            # Force strip all addresses programmatically in chat phase
-            if "swipe_candidates" in result and result["swipe_candidates"]:
-                for cand in result["swipe_candidates"]:
-                    cand["address"] = "📍 點擊下方按鈕以 Google 地圖導航為準"
 
-            
             # --- 動態反哺寫入機制 ---
             from api.index import LOCAL_DICT as TAIPEI_DICT
             import os
