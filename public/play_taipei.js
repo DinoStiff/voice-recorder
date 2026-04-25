@@ -91,10 +91,10 @@ document.getElementById("audio-control-btn").addEventListener("click", () => {
     if (currentTTSAudio) {
         if (!currentTTSAudio.paused) {
             currentTTSAudio.pause();
-            document.getElementById("audio-control-btn").innerHTML = "<i class="fas fa-play-circle"></i>";
+            document.getElementById("audio-control-btn").innerHTML = '<i class="fas fa-play-circle"></i>';
         } else {
             currentTTSAudio.play();
-            document.getElementById("audio-control-btn").innerHTML = "<i class="fas fa-pause-circle"></i>";
+            document.getElementById("audio-control-btn").innerHTML = '<i class="fas fa-pause-circle"></i>';
         }
     }
 });
@@ -170,7 +170,7 @@ async function handleUserInput(userText) {
             currentTTSAudio.play();
             
             document.getElementById("audio-control-btn").style.display = "inline-block";
-            document.getElementById("audio-control-btn").innerHTML = "<i class="fas fa-pause-circle"></i>";
+            document.getElementById("audio-control-btn").innerHTML = '<i class="fas fa-pause-circle"></i>';
             
             currentTTSAudio.onended = () => {
                 document.getElementById("audio-control-btn").style.display = "none";
