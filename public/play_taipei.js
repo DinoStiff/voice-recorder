@@ -12,6 +12,11 @@ function switchMode(mode) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`tab-${mode}`).classList.add('active');
     
+    // UI 清空避免跨頁籤誤會
+    document.getElementById('subtitle-board').style.display = 'none';
+    document.getElementById('itinerary-display').innerHTML = '';
+    document.getElementById('status-text').innerText = mode === "itinerary" ? "想去哪裡？按住麥克風告訴我！" : "純翻譯：請按住麥克風說話...";
+    
     const tagsSection = document.getElementById('tags-section');
     if (mode === 'itinerary') {
         tagsSection.style.display = 'block';
