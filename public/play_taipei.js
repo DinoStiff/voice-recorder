@@ -219,8 +219,7 @@ function addChatBubble(sender, text) {
     const div = document.createElement("div");
     
     // HTML Entity parsing layer effectively handles line breaks
-    let formattedText = text.replace(/
-/g, '<br>');
+    let formattedText = text.replace(/\\n/g, '<br>');
 
     if (sender === "user") {
         div.style.alignSelf = "flex-end";
@@ -254,8 +253,7 @@ function showView(viewId) {
     });
 }
 // ==========================================
-// 綁定文字
-與錄音多重輸入
+// 綁定文字輸入
 // ==========================================
 document.getElementById('send-button').addEventListener('click', () => {
     const textInput = document.getElementById('text-input');
