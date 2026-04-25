@@ -230,6 +230,9 @@ async def play_taipei_query(request: QueryRequest, http_request: FastAPIRequest)
         prompt_parts = [system_instruction]
         for msg in history[-5:]: # 最近 5 則
             prompt_parts.append(f"User: {msg['user']}\nAI: {msg['ai']}")
+        
+        gps_context = f"\n[系統悄悄話: 使用者的目前真實 GPS 座標為 {request.context.lat}, {request.context.lng}。如果對話提到『附近』、『這邊』，請以此座標為圓心進行搜尋。計算交通時間也請以此為起點！]"
+        prompt_parts.append(gps_context)
         prompt_parts.append(f"User: {request.user_text}")
         
         full_prompt = "\n".join(prompt_parts)
