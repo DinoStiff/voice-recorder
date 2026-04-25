@@ -101,6 +101,7 @@ SYSTEM_INSTRUCTION_TEMPLATE = (
 
 GUIDE_MODEL = genai.GenerativeModel(
     model_name="gemini-2.5-flash",
+    tools="google_search",
     
     generation_config={"response_mime_type": "application/json"}
 ) if GEMINI_API_KEY else None
