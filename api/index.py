@@ -72,21 +72,23 @@ DICT_CONTEXT = "\n".join([f"{item['name']}: {item['translation']}" for item in L
 system_instruction = (
     "You are a professional Taiwanese bilingual translator (Traditional Chinese and English).\n"
     "Your tasks:\n"
-    "1. Detect the source language of the [Target Text] (either Chinese or English).\n"
-    "2. If the input is Chinese, translate it into natural, fluent English.\n"
-    "3. If the input is English, translate it into natural, fluent Traditional Chinese (Taiwan usage).\n"
-    "4. Ignore meaningless filler words or stutters (e.g., 'uh', 'um', '那個').\n"
-    "5. Polish the translation to make it sound natural for spoken conversation.\n"
-    "CRITICAL RULE: DO NOT add, invent, or assume any extra information. Strictly stick to the original meaning.\n"
-    "Respond EXCLUSIVELY in valid JSON format with exactly three keys:\n"
-    "1. \"detected_lang\": the detected source language code (\"zh\" or \"en\").\n"
-    "2. \"raw_translation\": a direct translation of the content.\n"
-    "3. \"translated_text\": the naturally polished translation.\n"
+    "1. Detect the source language of the [Target Text]. It will be either Chinese (Traditional or Simplified) or English.\n"
+    "2. If the input is CHINESE (any script), you MUST translate it into natural, fluent ENGLISH.\n"
+    "3. If the input is ENGLISH, you MUST translate it into natural, fluent TRADITIONAL CHINESE (Taiwan usage).\n"
+    "4. Ignore meaningless filler words or stutters (e.g., 'uh', 'um', '那個', '然後').\n"
+    "5. Respond EXCLUSIVELY in valid JSON format with exactly three keys:\n"
+    "   - \"detected_lang\": the source language code (\"zh\" or \"en\").\n"
+    "   - \"raw_translation\": a direct translation of the content.\n"
+    "   - \"translated_text\": the naturally polished translation in the OPPOSITE language.\n"
+    "CRITICAL RULE: If detected_lang is 'zh', translated_text MUST be English. If detected_lang is 'en', translated_text MUST be Traditional Chinese.\n"
     "Ensure your output is strictly JSON, NO markdown.\n\n"
     "Examples:\n"
     "[Target Text]: 那個...呃...右邊那個是台北101大樓啦\n"
     '{"detected_lang": "zh", "raw_translation": "That... uh... that one on the right is Taipei 101 building.", '
     '"translated_text": "On your right is the Taipei 101 building."}\n'
+    "[Target Text]: 你知道最近的杂货店在哪里吗\n"
+    '{"detected_lang": "zh", "raw_translation": "Do you know where the nearest grocery store is?", '
+    '"translated_text": "Do you know where the nearest grocery store is?"}\n'
     "[Target Text]: Look! The Queen's Head is right over there.\n"
     '{"detected_lang": "en", "raw_translation": "看！女王頭就在那邊。", '
     '"translated_text": "快看！女王頭就在那裡。"}'
@@ -236,7 +238,7 @@ async def stt_endpoint(audio: UploadFile = File(...)):
             "https://api.groq.com/openai/v1/audio/transcriptions",
             headers={"Authorization": f"Bearer {groq_key}"},
             files={"file": (filename, content, mime)},
-            data={"model": "whisper-large-v3-turbo", "language": "zh", "response_format": "text"},
+            data={"model": "whisper-large-v3-turbo", "response_format": "text"},
             timeout=60
         )
 
@@ -532,10 +534,12 @@ async def clone_voice(text: str = Form(...), file: UploadFile = File(...), ride_
         # 建議使用 multilingual v2 模型以獲得更好的跨語言效果
         tts_data = {
             "text": text, 
-            "model_id": "eleven_multilingual_v2",
+            "model_id": "eleven_turbo_v2_5",
             "voice_settings": {
-                "stability": 0.5,
-                "similarity_boost": 0.75
+                "stability": 0.7,
+                "similarity_boost": 0.25,
+                "style": 0.0,
+                "use_speaker_boost": True
             }
         }
         
