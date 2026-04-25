@@ -144,7 +144,7 @@ async function startRecording(e) {
         document.getElementById('itinerary-display').innerHTML = '';
     } catch (err) {
         console.error("無法存取麥克風", err);
-        showStatus("麥克風授權失敗！");
+        showStatus("麥克風授權失敗：" + err.message);
     }
 }
 
@@ -171,7 +171,7 @@ async function processVoiceData() {
         const sttData = await sttRes.json();
         
         if (sttData.status === "error") {
-            throw new Error(sttData.error);
+            throw new Error("STT 語音辨識失敗：" + (sttData.error || "未知錯誤"));
         }
         
         const userText = sttData.text;
@@ -241,7 +241,7 @@ async function processVoiceData() {
             llmFinalData = await llmResToA.json();
 
             if (!llmFinalData || llmFinalData.status === "error") {
-                throw new Error("大腦運算失敗");
+                throw new Error("大腦運算失敗：" + (llmFinalData.detail || ""));
             }
         }
 
@@ -262,7 +262,10 @@ async function processVoiceData() {
             body: ttsFormData 
         });
         
-        if (!ttsRes.ok) throw new Error("TTS API 錯誤");
+        if (!ttsRes.ok) {
+            const errBody = await ttsRes.text();
+            throw new Error(`TTS API 錯誤 (${ttsRes.status}): ${errBody}`);
+        }
         
         const mp3Blob = await ttsRes.blob();
         const audio = new Audio(URL.createObjectURL(mp3Blob));
@@ -272,7 +275,7 @@ async function processVoiceData() {
 
     } catch (e) {
         console.error(e);
-        showStatus("連線出錯，請看 Console 日誌");
+        showStatus("發生異常：" + e.message);
     } finally {
         toggleMicButton(true);
     }
