@@ -184,9 +184,11 @@ async def play_taipei_query(request: QueryRequest, http_request: FastAPIRequest)
         # 3. 建立 Prompt
         poi_str = ", ".join([p['name'] for p in best_pois]) if best_pois else "無推薦景點"
         
-        # --- 優化點 2: 使用模板格式化指令 ---
-        system_instruction = SYSTEM_INSTRUCTION_TEMPLATE.format(
-            poi_str=poi_str, social_context=social_context
+        # --- 優化點 2: 使用明確字串替換指令 ---
+        system_instruction = SYSTEM_INSTRUCTION_TEMPLATE.replace(
+            "{poi_str}", poi_str
+        ).replace(
+            "{social_context}", social_context
         )
         
         # 組合歷史與當前問題
