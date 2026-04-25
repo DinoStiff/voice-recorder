@@ -254,7 +254,7 @@ async def play_taipei_query(request: QueryRequest, http_request: FastAPIRequest)
         return QueryResponse(
             requires_clarification=result.get("requires_clarification", False),
             translation=Translation(**result.get("translation", {"zh": "", "en": ""})),
-            voice_script=voice_script,
+            voice_script=result.get("voice_script", ""),
             swipe_candidates=[ItineraryItem(**item) for item in result.get("swipe_candidates", [])],
         )
         
