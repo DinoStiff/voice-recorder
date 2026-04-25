@@ -79,28 +79,25 @@ SOCIAL_SENTIMENT = load_json(SENTIMENT_PATH)
 
 # --- 優化點 1: 預先建立模型與指令模板 ---
 SYSTEM_INSTRUCTION_TEMPLATE = (
-    "你是一名專業、像真人一樣在地的台灣導遊，現在我們採用『漸進式探詢』與『Swipe 卡片挑選』的互動機制。\n"
-    "嚴格遵守以下所有規則：\n"
-    "1. 【極致寬鬆的提問 (拒絕像機器人般窮追猛打)】：只要使用者丟出了「主體(如：吃拉麵)」，搭配上了任何一個條件（比如說了預算、或是說了在哪一區），你就**不需要**再囉唆發問了！請直接將 `requires_clarification` 設為 false，並大方給出 6~8 個推薦選項供人挑選！\n"
-    "   *範例：使用者說「我想在中山區吃拉麵」，或是「我預算200吃拉麵」，請直接給名單，絕對不要再問「幾個人」、「什麼口味」等廢話！只有當對方只講「肚子餓」這種毫無頭緒的話，才可以發問！\n"
-    "2. 【發問限制】：如果真的必須發問，絕對一次只問最多 1 個問題，並附帶 3~4 個 `quick_replies` 快捷選項給他按。\n"
-    "3. 【防呆與防幻覺 (絕對禁止編造門牌)】：當生成選項時，**嚴禁捏造任何道路門牌！** 因為你常常把中山區的店編寫成大安區的地址，所以你的 `address` 欄位【只准填寫行政區或捷運站 (例如：捷運中山站附近 / 台北市大安區)】，絕對不能寫出詳細的門牌號碼數字！詳細地址我們會有外部 Google Maps 按鈕負責。\n"
-    "4. 你的回覆必須是嚴格、合法的 JSON 物件，不要加上 markdown 符號。\n"
+    "你是一名專業台灣導遊。採用『漸進式探詢』與『Swipe 卡片挑選』機制。\n"
+    "嚴格遵守以下規則：\n"
+    "1. 意圖歸納與寬鬆提問：只要知道想吃什麼、大概哪裡或預算，立刻產生推薦清單(`requires_clarification=false`)，不要死板發問。並從對話抓出他這趟旅程預計要去『幾個』地點，寫在 `expected_target_count` 中 (例如只說吃拉麵，就是 1)。\n"
+    "2. ⚠️強制啟動網路爬蟲：你剛剛給了使用者幽靈餐廳(大和拉麵、拉麵Davidson)，他很不高興。你【絕對必須動用 Google Search 內建能力】上網查出真實、活生生、且高評價的台灣店名！不准瞎掰！\n"
+    "3. 隱藏假地址：所有給出的 candidates 裡的 `address` 欄位，請一律填入「📍 點擊下方按鈕以 Google 地圖導航為準」，禁止出現任何路名或號碼！\n"
+    "你的回覆必須是嚴格 JSON。\n"
     "JSON Schema 如下：\n"
     "{\n"
     "  \"requires_clarification\": true 或 false,\n"
-    "  \"translation\": {\"zh\": \"精確解讀中文\", \"en\": \"英文翻譯\"},\n"
-    "  \"voice_script\": \"聊天用語。如果是提問就在此發問；如果生成候選了，就熱情地說『這幾家評價超高，請左右滑動挑選！』\",\n"
-    "  \"quick_replies\": [\"按鈕選項A\", \"按鈕選項B\"],\n"
+    "  \"expected_target_count\": 1,\n"
+    "  \"translation\": {\"zh\": \"解讀\", \"en\": \"translation\"},\n"
+    "  \"voice_script\": \"聊天用語\",\n"
+    "  \"quick_replies\": [\"按鈕\"],\n"
     "  \"swipe_candidates\": [\n"
-    "    {\"time\": \"建議停留時間\", \"name\": \"真實店家名稱\", \"price\": \"推估價格\", \"distance\": \"距離\", \"description\": \"真心推薦這家店的理由\", \"address\": \"只留大概位置(如: 捷運中山站旁)\", \"image_url\": \"\"}\n"
+    "    {\"time\": \"時間\", \"name\": \"真實上網查到的店名\", \"price\": \"價格\", \"distance\": \"距離\", \"description\": \"真心推薦\", \"address\": \"📍 點擊下方按鈕以 Google 地圖導航為準\", \"image_url\": \"\"}\n"
     "  ]\n"
     "}\n"
-    "規則補充：\n"
-    "- 絕對不要在 JSON 裡加入 `itinerary` 欄位。\n"
-    "- 網路習慣用語如「6.吃」代表「晚上6點吃」。\n"
-    "- 今日社群話題：\n{social_context}\n"
-)
+    "- 社群話題：\n{social_context}\n"
+))
 
 GUIDE_MODEL = genai.GenerativeModel(
     model_name="gemini-2.5-flash",
@@ -223,6 +220,11 @@ async def play_taipei_query(request: QueryRequest, http_request: FastAPIRequest)
         
         try:
             result = json.loads(clean_json)
+            # Force strip all addresses programmatically in chat phase
+            if "swipe_candidates" in result and result["swipe_candidates"]:
+                for cand in result["swipe_candidates"]:
+                    cand["address"] = "📍 點擊下方按鈕以 Google 地圖導航為準"
+
             
             # --- 動態反哺寫入機制 ---
             from api.index import LOCAL_DICT as TAIPEI_DICT
@@ -284,6 +286,7 @@ async def play_taipei_query(request: QueryRequest, http_request: FastAPIRequest)
 class ScheduleRequest(BaseModel):
     liked_venues: List[ItineraryItem]
     session_id: str = "default_session"
+    expected_target_count: int = 0
     context: ContextData = Field(default_factory=ContextData)
 
 # We will reuse QueryResponse but this time swipe_candidates will hold the chronological itinerary
@@ -341,10 +344,10 @@ async def schedule_itinerary(request: ScheduleRequest):
         
         # --- HARD PROGRAMMATIC OVERRIDES (Do not trust the LLM!) ---
         # Override the length if the LLM flags it as a single event but disobeys length
-        is_single = result.get("is_single_event", False)
-        if is_single and len(result.get("swipe_candidates", [])) > 1:
-            # Force slice to the first (best) item
-            result["swipe_candidates"] = [result["swipe_candidates"][0]]
+        # Mathematical absolute constraint
+        target_c = request.expected_target_count
+        if target_c > 0 and len(result.get("swipe_candidates", [])) > target_c:
+            result["swipe_candidates"] = result["swipe_candidates"][:target_c]
             
         # Strip all addresses programmatically in case the LLM disobeys the address rule
         for cand in result.get("swipe_candidates", []):
