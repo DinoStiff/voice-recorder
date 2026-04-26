@@ -326,15 +326,23 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+/* 無照片時縮小佔位高度 */
+div.modal-header-img.no-image-placeholder {
+  height: 130px;
+  font-size: 0.95rem;
+}
+
 .modal-body-content {
   padding: 2.5rem;
 }
 
 .modal-title {
-  font-size: 2rem;
+  font-size: 1.5rem;
   font-weight: 800;
   margin-bottom: 0.5rem;
   color: #fff;
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 .modal-subtitle {
@@ -419,6 +427,8 @@ body {
   font-size: 1rem;
   line-height: 1.5;
   padding-left: 1.4rem;
+  word-break: break-all;
+  overflow-wrap: break-word;
 }
 
 .price-highlight {
@@ -474,6 +484,10 @@ body {
 
   .modal-header-img {
     height: 200px;
+  }
+
+  div.modal-header-img.no-image-placeholder {
+    height: 100px;
   }
 }
 
