@@ -40,6 +40,7 @@ load_dotenv()
 
 # Read ELEVENLABS at module time (not used at module load)
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+ELEVENLABS_API_KEY_ZH = os.getenv("ELEVENLABS_API_KEY_ZH")
 CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
 CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY")
 CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
@@ -470,15 +471,29 @@ async def clone_voice(text: str = Form(...), file: UploadFile = File(...), ride_
     3. 若發生「每月額度已達上限 (65次)」，則自動降級使用預設高品質聲音，確保功能不中斷。
     """
     try:
-        el_key = ELEVENLABS_API_KEY.encode('ascii', 'ignore').decode('ascii').strip() if ELEVENLABS_API_KEY else ""
-        headers = {"xi-api-key": el_key}
+        # [優化 3] 判斷是否為中文
+        is_chinese = any('\u4e00' <= char <= '\u9fff' for char in text)
         
+        # 根據語言決定使用哪一組 API Key (如果有設定 ZH Key 的話)
+        current_key = (ELEVENLABS_API_KEY_ZH if is_chinese and ELEVENLABS_API_KEY_ZH else ELEVENLABS_API_KEY)
+        el_key = current_key.encode('ascii', 'ignore').decode('ascii').strip() if current_key else ""
+        headers = {"xi-api-key": el_key}
+
         # 預設聲音 (Mimi)，作為額度耗盡時的備援
         DEFAULT_VOICE_ID = "zrHiDhphv9ZnVXBqCLjz" 
         voice_id = None
+        
+        if is_chinese:
+            # 使用您在帳號 B 新增的專屬中文語音 (Lili)
+            voice_id = "NIqnuIdrAT3LLSSxN05L" 
+            logger.info(f"🇨🇳 [Native Chinese Voice] Using Account B (Key_ZH) for voice {voice_id}")
+        else:
+            # 預設使用 Rachel 作為英文語音
+            voice_id = "21m00Tcm4TlvDq8ikWAM"
+            logger.info(f"🇺🇸 [English Voice] Using Account A (Default Key) for voice {voice_id}")
 
-        # [優化 1] 檢查快取
-        if ride_id and ride_id in session_voice_ids:
+        # [優化 1] 檢查快取 (僅在尚未決定 voice_id 時執行)
+        if not voice_id and ride_id and ride_id in session_voice_ids:
             voice_id = session_voice_ids[ride_id]
             logger.info(f"♻️ [Voice Cache Hit] Reusing voice {voice_id} for session {ride_id}")
 
