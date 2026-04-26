@@ -21,7 +21,7 @@
 ## 🚀 快速開始 (Quick Start)
 
 ### 1. 啟動背景爬蟲與快取
-若你需要單獨手動刷新最新的假資料，只要執行這隻 Python 腳本：
+若你需要單獨手動刷新最新的資料，只要執行這隻 Python 腳本：
 ```bash
 python social_scraper.py
 ```
