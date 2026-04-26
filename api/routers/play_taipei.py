@@ -91,6 +91,8 @@ SYSTEM_INSTRUCTION_TEMPLATE = (
     "4. 💰【預算精算師邏輯】：在「行程表模式」下，如果使用者提供的是「總預算」，你必須自動扣除主要活動的估算花費再安排剩下的項目。例如：預算 1000 元，溜冰估計花 600 元，那午餐就只能推薦人均 200~300 元的平價選項，並扣掉100元交通費。請務必在回應中展現你為他們「精打細算、考慮周全」的貼心感，並告訴他們你的預算分配法！\n"
     "4B. 💖【客群與氛圍配對 (Vibe Match)】：在挑選景點和餐廳時，務必具有高度的社交常識！如果使用者說「約會」，請絕對不要塞入「親子樂園」或過於雜亂的排隊平價小吃，而是要尋找適合情侶互動的景點（例如做蛋糕、看夜景、溜冰）與有浪漫氛圍的餐廳！請在卡片描述中巧妙點出「為什麼這個地方適合約會/親子/朋友聚會」！\n"
     "5. ⚡️【挑卡選項數量最高原則】：不論是單一挑卡模式還是多種活動的行程表模式，你都必須『火力全開』大方給出 **至少 6 到 8 個** 選項！嚴格警告：『絕對不准只給 3 張卡片敷衍了事』！爬蟲資料不夠時就找 Google Maps，絕對要把它塞滿！『絕對禁止重複出現同一間店』！！！\n"
+    "6. 🎭【主題式個人化】：如果在第一輪對話或是使用者還沒給明確偏好前，請透過 `quick_replies` 陣列提供【主題式個人化】選項給使用者點選！請務必從以下挑選 2~4 個作為按鈕：['夜間美食', '演唱會', '市集展演', '商圈購物', '文青散策', '親子體驗', '秘境探索']！藉此建立個人偏好輪廓！\n"
+    "7. 🔍【社群輿情探勘與當日特展】：在挑選地點與活動時，請發揮 NLP 能力模擬分析 PTT、Dcard、Instagram、Facebook、Threads 等公開平台的流行熱度！在你的敘述（`description` 或 `voice_script`）中，**必須不經意地穿插**「根據最近 Threads 網友熱烈討論...」或「這是 PTT/Dcard 上超紅的新興景點」等社群背書用語！此外，請優先幫使用者尋找【當天此時此刻特別才有的展覽或節慶市集】，表現出你掌握即時當地情報的能力！\n"
     "你的回覆必須是嚴格 JSON。\n"
     "JSON Schema 如下：\n"
     "{\n"
@@ -103,7 +105,7 @@ SYSTEM_INSTRUCTION_TEMPLATE = (
     "    {\"category\": \"活動類別(例如: 午餐, 逛街, 溜冰)\", \"time\": \"時間\", \"name\": \"真實上網查到的店名(含分店)\", \"price\": \"價格\", \"distance\": \"🚗10分 🚌捷運某站走路5分\", \"description\": \"真心推薦\", \"address\": \"真實地址\", \"image_url\": \"\"}\n"
     "  ]\n"
     "}\n"
-    "- 社群話題：\n{social_context}\n"
+    "- 系統真實時間（用於篩選當日特展）：{current_datetime}\n"
     "- 網路即時搜尋資料與商家資訊：\n{web_search}\n"
 )
 
@@ -337,10 +339,11 @@ def play_taipei_query(request: QueryRequest, http_request: FastAPIRequest):
         
         web_search = get_grounding_context(search_ctx_clean if search_ctx_clean else search_ctx, request.context.lat, request.context.lng)
         print("\n\n=========== GOOGLE MAPS FETCH ===========\n" + f"【原始】{search_ctx}\n【清洗後】{search_ctx_clean}\n" + str(web_search) + "\n=======================================\n\n")
+        from datetime import datetime
+        current_dt_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         system_instruction = SYSTEM_INSTRUCTION_TEMPLATE.replace(
-            "{poi_str}", poi_str
-        ).replace(
-            "{social_context}", social_context
+            "{current_datetime}", current_dt_str
         ).replace(
             "{web_search}", web_search
         )

@@ -544,3 +544,16 @@ function renderTournamentCard() {
     `;
     document.querySelector("#swipe-view > div:nth-child(2)").style.display = "none";
 }
+
+// ==========================================
+// 啟動時自動推播主題式提示 (提供個人化輪廓選項)
+// ==========================================
+window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        addChatBubble("ai", "歡迎來到音為台北！請告訴我您的行程規劃需求，或者直接點選下方感興趣的主題：", [
+            "夜間美食", "演唱會", "市集展演", "商圈購物", "文青散策", "親子體驗", "秘境探索"
+        ]);
+        showStatus("等待您的選擇或輸入...");
+    }, 600);
+});
+
