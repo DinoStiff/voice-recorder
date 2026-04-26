@@ -5,7 +5,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import puppeteer from 'puppeteer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,7 +12,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.use(cors());
 
-const port = 3000;
+const port = process.env.PORT || 3001;
 let hotelsData = [];
 
 function loadData() {
@@ -227,16 +226,6 @@ app.get('/api/search', async (req, res) => {
             return res.json({ isFuzzy: false, isExternal: false, isUrlSearch: true, scrapedTitle, results: exactResults.slice(0, 50) });
         } else {
             console.log(`[後端執行狀況] 網址比對失敗，該網址可能為非法旅宿`);
-            // 嘗試用 Puppeteer 取得實際地址
-            let scrapedAddress = null;
-            try {
-                const isAirbnb = originalQuery.toLowerCase().includes('airbnb');
-                if (isAirbnb) {
-                    const { data: locData } = await axios.get(`http://localhost:${port}/api/airbnb_location?url=${encodeURIComponent(originalQuery)}`, { timeout: 35000 }).catch(() => ({ data: null }));
-                    if (locData && locData.address) scrapedAddress = locData.address;
-                }
-            } catch (_) {}
-
             return res.json({
                 isFuzzy: false,
                 isExternal: true,
@@ -245,11 +234,10 @@ app.get('/api/search', async (req, res) => {
                 results: [{
                     Name: scrapedTitle || '未知網頁',
                     Town: '未合法登記',
-                    Add: scrapedAddress || '地址未提供（非合法登記旅宿）',
+                    Add: originalQuery,
                     Spec: '警告：您輸入的網址住宿，經系統比對不在觀光署合法登記名單中！',
                     Serviceinfo: '這可能是非法日租套房或未立案旅宿，請特別留意住宿安全。',
                     Website: originalQuery,
-                    sourceUrl: originalQuery,
                     isExternal: true
                 }]
             });
@@ -489,130 +477,6 @@ app.get('/api/suggestions', (req, res) => {
     }));
 
     res.json(suggestions);
-});
-
-// =====================================================
-// [新功能] Airbnb 房源地圖座標爬取
-// 輸入: ?url=<airbnb_url>
-// 輸出: { lat, lng, address, title }
-// =====================================================
-app.get('/api/airbnb_location', async (req, res) => {
-    const airbnbUrl = req.query.url;
-    if (!airbnbUrl) {
-        return res.status(400).json({ error: '缺少 url 參數' });
-    }
-    if (!airbnbUrl.includes('airbnb')) {
-        return res.status(400).json({ error: '僅支援 Airbnb 網址' });
-    }
-
-    console.log(`[Airbnb定位] 開始爬取座標: ${airbnbUrl}`);
-
-    let browser;
-    try {
-        browser = await puppeteer.launch({
-            headless: true,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-blink-features=AutomationControlled',
-                '--lang=zh-TW'
-            ]
-        });
-
-        const page = await browser.newPage();
-
-        // 偽裝成真實瀏覽器，避免被 Airbnb 偵測
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
-        await page.setExtraHTTPHeaders({ 'Accept-Language': 'zh-TW,zh;q=0.9' });
-
-        // 前往頁面，等待網路穩定
-        await page.goto(airbnbUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-
-        // 方法一：從 __NEXT_DATA__ script tag 讀取 JSON (最可靠)
-        let locationData = await page.evaluate(() => {
-            const nextDataEl = document.getElementById('__NEXT_DATA__');
-            if (!nextDataEl) return null;
-            try {
-                const json = JSON.parse(nextDataEl.textContent);
-                // 遞迴搜尋含有 lat/lng 的物件
-                const findLatLng = (obj, depth = 0) => {
-                    if (depth > 15 || !obj || typeof obj !== 'object') return null;
-                    if (typeof obj.lat === 'number' && typeof obj.lng === 'number') {
-                        return { lat: obj.lat, lng: obj.lng };
-                    }
-                    if (typeof obj.latitude === 'number' && typeof obj.longitude === 'number') {
-                        return { lat: obj.latitude, lng: obj.longitude };
-                    }
-                    for (const key of Object.keys(obj)) {
-                        const result = findLatLng(obj[key], depth + 1);
-                        if (result) return result;
-                    }
-                    return null;
-                };
-                return findLatLng(json);
-            } catch (e) {
-                return null;
-            }
-        });
-
-        // 方法二：如果 __NEXT_DATA__ 沒找到，嘗試從 Apollo/GraphQL 快取讀取
-        if (!locationData) {
-            locationData = await page.evaluate(() => {
-                const scripts = Array.from(document.querySelectorAll('script'));
-                for (const script of scripts) {
-                    const text = script.textContent || '';
-                    // 嘗試比對常見的 lat/lng 座標格式
-                    const match = text.match(/"lat(?:itude)?"\s*:\s*([0-9]{1,3}\.[0-9]+).*?"l(?:ng|on)(?:gitude)?"\s*:\s*([0-9]{1,3}\.[0-9]+)/);
-                    if (match) {
-                        const lat = parseFloat(match[1]);
-                        const lng = parseFloat(match[2]);
-                        // 確認是台灣附近座標 (21~26°N, 119~122°E)
-                        if (lat >= 21 && lat <= 26 && lng >= 119 && lng <= 123) {
-                            return { lat, lng };
-                        }
-                    }
-                }
-                return null;
-            });
-        }
-
-        // 同時擷取頁面標題與顯示地址
-        const pageTitle = await page.title();
-        const displayAddress = await page.evaluate(() => {
-            // Airbnb 地址通常在包含「鄰近」或區域名稱的 section
-            const candidates = [
-                document.querySelector('[data-section-id="LOCATION_DEFAULT"] h2'),
-                document.querySelector('[data-section-id="LOCATION_DEFAULT"] h3'),
-                document.querySelector('section[aria-label*="位置"] h2'),
-                document.querySelector('section[aria-label*="location"] h2'),
-            ];
-            for (const el of candidates) {
-                if (el && el.textContent.trim()) return el.textContent.trim();
-            }
-            return null;
-        });
-
-        await browser.close();
-
-        if (locationData) {
-            console.log(`[Airbnb定位] ✅ 成功取得座標: lat=${locationData.lat}, lng=${locationData.lng}`);
-            return res.json({
-                success: true,
-                lat: locationData.lat,
-                lng: locationData.lng,
-                title: pageTitle.replace(' - Airbnb', '').trim(),
-                address: displayAddress || '座標已取得，詳細地址請參考地圖'
-            });
-        } else {
-            console.log(`[Airbnb定位] ❌ 無法從頁面解析出座標`);
-            return res.json({ success: false, error: '無法解析座標，Airbnb 可能已更新頁面結構' });
-        }
-
-    } catch (err) {
-        if (browser) await browser.close().catch(() => {});
-        console.error(`[Airbnb定位] 爬取失敗: ${err.message}`);
-        return res.status(500).json({ success: false, error: err.message });
-    }
 });
 
 app.listen(port, () => {

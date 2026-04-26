@@ -262,34 +262,10 @@ window.fetchAndRenderModalNearby = async () => {
     
     data.results.forEach((h, idx) => {
       if (h.Py && h.Px) {
-        // 周遭合法旅宿：自訂綠色帶數字 marker
-        const nearbyIcon = L.divIcon({
-          className: '',
-          html: `<div style="
-            width: 28px; height: 28px;
-            background: linear-gradient(135deg, #10b981, #059669);
-            border-radius: 50%;
-            border: 2.5px solid white;
-            box-shadow: 0 3px 10px rgba(16,185,129,0.55);
-            display: flex; align-items: center; justify-content: center;
-            color: white; font-size: 12px; font-weight: 800;
-            font-family: -apple-system, sans-serif;
-            line-height: 1;
-          ">${idx + 1}</div>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14],
-          popupAnchor: [0, -16]
-        });
-        const m = L.marker([parseFloat(h.Py), parseFloat(h.Px)], { icon: nearbyIcon })
+        // Customize marker icon color if possible, or just standard
+        const m = L.marker([parseFloat(h.Py), parseFloat(h.Px)])
                    .addTo(window.modalLeafletMap)
-                   .bindPopup(`
-                     <div style="min-width:160px;">
-                       <div style="font-weight:700;color:#1f2937;font-size:0.95rem;margin-bottom:4px;">${idx+1}. ${h.Name}</div>
-                       <div style="color:#10b981;font-size:0.8rem;font-weight:600;">✅ 合法旅宿</div>
-                       <div style="color:#6b7280;font-size:0.8rem;margin-top:4px;">CP值: <strong>${h.cpValue}</strong> &nbsp;|&nbsp; 距離: ${h.distance}km</div>
-                       <div style="color:#6b7280;font-size:0.8rem;">NT$ ${h.simulatedPrice} 起</div>
-                     </div>
-                   `);
+                   .bindPopup(`<b>${h.Name}</b><br>CP值: ${h.cpValue}<br>距離: ${h.distance}km`);
         window.modalMarkers.push(m);
       }
       
@@ -650,7 +626,6 @@ function openModal(hotel, priceText, isExternal = false) {
   if (window.modalLeafletMap) {
     window.modalLeafletMap.remove();
     window.modalLeafletMap = null;
-    window.modalMapLegend = null; // 圖例跟著地圖一起重置
   }
 
   const validWeb = hotel.Website && hotel.Website !== '未找到' && hotel.Website !== '無';
@@ -743,18 +718,8 @@ function openModal(hotel, priceText, isExternal = false) {
           <ul class="detail-list">
             <li>
               <span class="detail-label"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> 地址</span>
-              <span class="detail-value">${(hotel.Add && !hotel.Add.startsWith('http')) ? hotel.Add : '未提供'}</span>
+              <span class="detail-value">${hotel.Add || '未提供'}</span>
             </li>
-            ${(() => {
-              const linkUrl = hotel.sourceUrl || (hotel.Add && hotel.Add.startsWith('http') ? hotel.Add : null);
-              if (!linkUrl) return '';
-              const display = linkUrl.length > 60 ? linkUrl.slice(0, 60) + '…' : linkUrl;
-              return `<li>
-              <span class="detail-label"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg> 來源連結</span>
-              <a href="${linkUrl}" target="_blank" class="detail-value" style="color:#93c5fd; font-size:0.82rem; padding-left:1.4rem; word-break:break-all; text-decoration:underline;">${display}</a>
-            </li>`;
-            })()}
-
             <li>
               <span class="detail-label"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg> 電話</span>
               <span class="detail-value">${hotel.Tel || '未提供'}</span>
@@ -832,61 +797,9 @@ function openModal(hotel, priceText, isExternal = false) {
       }).addTo(window.modalLeafletMap);
       
       window.modalMainMarker = L.marker([lat, lng]).addTo(window.modalLeafletMap)
-        .bindPopup(`<strong style="color:#1f2937;font-size:1rem;">${hotel.Name}</strong><br><span style="color:#6b7280;font-size:0.85rem;">${hotel.Add || ''}</span><br><span style="color:#10b981;font-size:0.8rem;font-weight:bold;">✅ 合法旅宿</span>`).openPopup();
-
-      // 主旅宿：自訂紅色圖釘 marker
-      const mainIcon = L.divIcon({
-        className: '',
-        html: `<div style="
-          width: 36px; height: 36px;
-          background: linear-gradient(135deg, #ef4444, #dc2626);
-          border-radius: 50% 50% 50% 0;
-          transform: rotate(-45deg);
-          border: 3px solid white;
-          box-shadow: 0 4px 12px rgba(239,68,68,0.6);
-          position: relative;
-        ">
-          <div style="
-            position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%,-50%) rotate(45deg);
-            color: white; font-size: 16px; line-height:1;
-          ">🏨</div>
-        </div>`,
-        iconSize: [36, 36],
-        iconAnchor: [18, 36],
-        popupAnchor: [0, -38]
-      });
-      window.modalMainMarker.setIcon(mainIcon);
+        .bindPopup(`<strong style="color:black;">${hotel.Name}</strong><br><span style="color:gray;">${hotel.Add}</span>`).openPopup();
         
       window.modalMarkers = [];
-
-      // 加入地圖圖例（右下角）
-      if (!window.modalMapLegend) {
-        window.modalMapLegend = L.control({ position: 'bottomright' });
-        window.modalMapLegend.onAdd = function() {
-          const div = L.DomUtil.create('div');
-          div.style.cssText = `
-            background: rgba(15,23,42,0.92); backdrop-filter:blur(8px);
-            border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
-            padding: 8px 12px; font-size: 0.78rem; color: #e2e8f0;
-            line-height: 1.8; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-            pointer-events: none;
-          `;
-          div.innerHTML = `
-            <div style="font-weight:700; margin-bottom:4px; color:#94a3b8; letter-spacing:0.05em;">圖例</div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="display:inline-block;width:14px;height:14px;background:linear-gradient(135deg,#ef4444,#dc2626);border-radius:50%;border:2px solid white;box-shadow:0 2px 6px rgba(239,68,68,0.6);"></span>
-              當前查詢旅宿
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="display:inline-block;width:14px;height:14px;background:linear-gradient(135deg,#10b981,#059669);border-radius:50%;border:2px solid white;box-shadow:0 2px 6px rgba(16,185,129,0.6);"></span>
-              周遭合法旅宿 ✅
-            </div>
-          `;
-          return div;
-        };
-        window.modalMapLegend.addTo(window.modalLeafletMap);
-      }
       
       // Auto-search on map move/zoom
       window.modalLeafletMap.on('moveend', () => {
@@ -895,107 +808,6 @@ function openModal(hotel, priceText, isExternal = false) {
       // Trigger initial search
       window.fetchAndRenderModalNearby();
     }, 100);
-  } else if (hotel.Website && hotel.Website.includes('airbnb')) {
-    // === Airbnb 房源：自動抓取座標後初始化地圖 ===
-    const mapEl = document.getElementById('modalLeafletMap');
-    mapEl.innerHTML = `
-      <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; gap:0.8rem; color:var(--text-muted);">
-        <div class="spinner" style="width:32px; height:32px; border-width:3px;"></div>
-        <span style="font-size:0.9rem;">正在從 Airbnb 取得房源座標...</span>
-      </div>
-    `;
-
-    fetch(`/api/airbnb_location?url=${encodeURIComponent(hotel.Website)}`)
-      .then(r => r.json())
-      .then(data => {
-        if (!data.success) {
-          mapEl.innerHTML = `<div style="display:flex; justify-content:center; align-items:center; height:100%; color:#ef4444; font-size:0.9rem;">⚠️ 無法取得座標：${data.error || '未知錯誤'}</div>`;
-          return;
-        }
-
-        const lat = data.lat;
-        const lng = data.lng;
-        window.currentModalHotelLat = lat;
-        window.currentModalHotelLng = lng;
-        window.currentModalHotelName = hotel.Name;
-
-        // 清空 loading 內容（Leaflet 需要空的 div）
-        mapEl.innerHTML = '';
-
-        window.modalLeafletMap = L.map('modalLeafletMap').setView([lat, lng], 15);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-          attribution: '© OpenStreetMap, © CARTO'
-        }).addTo(window.modalLeafletMap);
-
-        // Airbnb 房源標記：橘色警示圖釘
-        const airbnbIcon = L.divIcon({
-          className: '',
-          html: `<div style="
-            width: 36px; height: 36px;
-            background: linear-gradient(135deg, #f97316, #ea580c);
-            border-radius: 50% 50% 50% 0;
-            transform: rotate(-45deg);
-            border: 3px solid white;
-            box-shadow: 0 4px 12px rgba(249,115,22,0.65);
-            position: relative;">
-            <div style="
-              position: absolute; top: 50%; left: 50%;
-              transform: translate(-50%,-50%) rotate(45deg);
-              color: white; font-size: 16px; line-height:1;">⚠️</div>
-          </div>`,
-          iconSize: [36, 36],
-          iconAnchor: [18, 36],
-          popupAnchor: [0, -38]
-        });
-
-        window.modalMainMarker = L.marker([lat, lng], { icon: airbnbIcon })
-          .addTo(window.modalLeafletMap)
-          .bindPopup(`
-            <div style="min-width:160px;">
-              <div style="font-weight:700; color:#1f2937; font-size:0.95rem; margin-bottom:4px;">${hotel.Name}</div>
-              <div style="color:#f97316; font-size:0.8rem; font-weight:600;">⚠️ Airbnb 房源（未合法登記）</div>
-              <div style="color:#6b7280; font-size:0.8rem; margin-top:4px;">座標來源：Airbnb 頁面地圖</div>
-            </div>
-          `).openPopup();
-
-        window.modalMarkers = [];
-
-        // 圖例（右下角）
-        if (!window.modalMapLegend) {
-          window.modalMapLegend = L.control({ position: 'bottomright' });
-          window.modalMapLegend.onAdd = function() {
-            const div = L.DomUtil.create('div');
-            div.style.cssText = `
-              background: rgba(15,23,42,0.92); backdrop-filter:blur(8px);
-              border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
-              padding: 8px 12px; font-size: 0.78rem; color: #e2e8f0;
-              line-height: 1.8; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-              pointer-events: none;
-            `;
-            div.innerHTML = `
-              <div style="font-weight:700; margin-bottom:4px; color:#94a3b8; letter-spacing:0.05em;">圖例</div>
-              <div style="display:flex;align-items:center;gap:6px;">
-                <span style="display:inline-block;width:14px;height:14px;background:linear-gradient(135deg,#f97316,#ea580c);border-radius:50%;border:2px solid white;box-shadow:0 2px 6px rgba(249,115,22,0.6);"></span>
-                Airbnb 房源（未登記）⚠️
-              </div>
-              <div style="display:flex;align-items:center;gap:6px;">
-                <span style="display:inline-block;width:14px;height:14px;background:linear-gradient(135deg,#10b981,#059669);border-radius:50%;border:2px solid white;box-shadow:0 2px 6px rgba(16,185,129,0.6);"></span>
-                周遭合法旅宿 ✅
-              </div>
-            `;
-            return div;
-          };
-          window.modalMapLegend.addTo(window.modalLeafletMap);
-        }
-
-        // 地圖移動時重新搜尋周遭合法旅宿
-        window.modalLeafletMap.on('moveend', () => window.fetchAndRenderModalNearby());
-        window.fetchAndRenderModalNearby();
-      })
-      .catch(err => {
-        mapEl.innerHTML = `<div style="display:flex; justify-content:center; align-items:center; height:100%; color:#ef4444; font-size:0.9rem;">⚠️ 座標取得失敗：${err.message}</div>`;
-      });
   } else {
     document.getElementById('modalLeafletMap').innerHTML = '<div style="display:flex; justify-content:center; align-items:center; height:100%; color:var(--text-muted);">無座標資訊，無法載入地圖</div>';
   }
@@ -1007,7 +819,6 @@ function closeModal() {
   if (window.modalLeafletMap) {
     window.modalLeafletMap.remove();
     window.modalLeafletMap = null;
-    window.modalMapLegend = null;
   }
 }
 
